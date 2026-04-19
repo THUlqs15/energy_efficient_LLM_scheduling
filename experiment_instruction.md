@@ -488,7 +488,7 @@ A Bash script at the project root with:
 | Model dir            | `MODEL_DIR`                 | `/home/ubuntu/lqs/LLM_model` |
 | Served model name    | `MODEL_NAME`                | `default` |
 | # requests           | `NUM_REQUESTS`              | `1000` |
-| Arrival rate (req/s) | `RATE_QPS`                  | `4` |
+| Arrival rate (req/s) | `RATE_QPS`                  | `8` |
 | TTFT μ (ms)          | `TTFT_MEAN_MS`              | `3000` |
 | TTFT σ (ms)          | `TTFT_STD_MS`               | `500` |
 | TPOT μ (ms)          | `TPOT_MEAN_MS`              | `200` |
@@ -1027,7 +1027,7 @@ bash vllm_patches/apply_patch.sh /home/ubuntu/lqs/vllm
 
 # 2. Default-vs-custom run
 bash main.sh --tag demo \
-    --num-requests 500 --rate-qps 4 \
+    --num-requests 500 --rate-qps 8 \
     --ttft-mean-ms 3000 --tpot-mean-ms 200 \
     --beta 1.0 --w-ttft 1.0 --w-tpot 1.0 \
     --freq-stride 4 --mode both
