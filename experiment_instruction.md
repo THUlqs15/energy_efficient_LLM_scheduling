@@ -51,8 +51,8 @@ compare two schedulers on exactly the same workload:
 
 * **Baseline**: vLLM's default scheduler, GPU clocks not locked.
 * **Ours**: an energy-aware scheduler that solves the per-iteration
-  optimisation in §2 below using the *frequency-first* solution in §3,
-  and locks the SM clock via `pynvml` on every iteration.
+  optimisation in §2 below by **direct brute-force search** over
+  `(B, f)` (§3), and locks the SM clock via `pynvml` on every iteration.
 
 The reported metrics (per run) are:
 
@@ -61,6 +61,14 @@ The reported metrics (per run) are:
 * mean TPOT violation: `mean_n [max(0, TPOT_actual_n − TPOT_req_n)]`
 * mean GPU power (W), total energy (J)
 * TTFT / TPOT SLO attainment (fraction)
+* **mean solve-to-exec ratio**:
+  `mean_i [solve_ms_i / exec_ms_i]` averaged across every scheduling
+  iteration `i`, where `solve_ms_i` is the wall-clock cost of the
+  brute-force `(B, f)` search on iteration `i` and `exec_ms_i` is the
+  wall-clock cost of the batch that search produced (i.e. the gap
+  between `schedule()` exit and the next `schedule()` entry). This
+  metric is only meaningful for the custom scheduler; **report 0 for
+  vLLM's default scheduler**.
 
 ---
 
@@ -123,8 +131,9 @@ per-iteration time budget. Recommended
 
 Because `ET_i(B, f)` contains the two indicator terms from §2.2, both
 the objective and the time constraint pick up a **step change** when
-the first prefill (or first decode) is added to `B`. §3 shows how the
-frequency-first algorithm still decomposes cleanly.
+the first prefill (or first decode) is added to `B`. §3 handles this
+by evaluating `ET_i` exactly on every enumerated batch (direct
+brute-force search over `(B, f)`).
 
 ### 2.2 Batch execution time model (Route B+, 9-parameter)
 
@@ -167,12 +176,11 @@ ET_i(B, f) = sum_{n ∈ B} t_q(n, f)  +  T_ovh(B, f)  +  t_c           (**)
 > iterations incurs both overheads**, while a mixed batch pays each
 > overhead at most once.
 
-For the knapsack view in eq. 4 it is convenient to absorb the per-batch
-overhead into the objective and the time constraint explicitly (see §3).
+The brute-force solver in §3 evaluates `ET_i(B, f)` directly on every
+candidate batch, so no reformulation is needed.
 
 Symbol: throughout we write `t_q(n, f)` for the per-request piece and
-`T_ovh(B, f)` for the batch-level piece; the old `t_{n,f}` of §2.1
-corresponds to `t_q(n, f)` here.
+`T_ovh(B, f)` for the batch-level piece.
 
 ### 2.3 Power model
 
@@ -182,87 +190,92 @@ P(f) = k3 · f^3  +  k2 · f^2  +  k1 · f  +  k0                 (Watts, f in M
 
 ---
 
-## 3. Frequency-first solution (Section 1.1 of the paper, adapted to Route B+)
+## 3. Brute-force solution over (B, f)
 
-The batch-level overhead of §2.2 makes the adjusted utility of a single
-request depend on *whether the batch already contains any prefill /
-decode*. We sidestep this with an extra outer enumeration over the
-three relevant batch-type masks
+Eq. 4–6 is a mixed-integer problem, but both decision variables live
+on small sets in our setting:
+
+* `f` ranges over a discrete, hardware-imposed set of SM clocks
+  (|F| = 82 on A800-SXM4; after `FREQ_STRIDE=4` subsampling we evaluate
+  ~14 of them).
+* `B` is a subset of the per-iteration candidate set `N_i = R_i ∪ W_i`.
+  At the target load `|N_i|` is small (our workloads keep it in the
+  mid-teens; see the practical cap below).
+
+With both sets small we drop the frequency-first heuristic entirely and
+solve eq. 4 by **direct enumeration** over `(B, f)`. The per-batch
+indicators `w_pf` / `w_dec` of §2.2 cause no extra complication here —
+they are absorbed into `ET_i(B, f)` and evaluated exactly.
+
+### 3.1 Algorithm
 
 ```
-M ∈ { prefill_only, decode_only, mixed }
+solve(N_i, L_max, η, β):
+    best_J     = 0.0           # empty batch is always feasible
+    best_B, best_f = [], f_max # safety fallback: idle at top clock
+    for f in F[::FREQ_STRIDE]:
+        P_f = P(f)
+        for B in powerset(N_i):            # includes ∅
+            if sum_{n∈B} ℓ_{i,n} > L_max:     continue   # eq. 5
+            ET = batch_time_ms(B, f)           # Route B+ (**), §2.2
+            if ET > η:                          continue   # eq. 6
+            J = sum_{n∈B} f_{i,n} − β · P_f · ET
+            if J > best_J:
+                best_J, best_B, best_f = J, B, f
+    return best_f, best_B, ET_at_best
 ```
 
-Given `M`, the per-batch overhead becomes a known constant `T_ovh(M, f)`
-and the problem collapses back to a standard 2-D knapsack over the
-candidate subset.
+Rationale:
 
-For every candidate SM frequency `f ∈ F` and every mask `M`:
+* `batch_time_ms(B, f)` includes the indicator overhead
+  `T_ovh(B, f) + t_c` and the per-request sum `Σ t_q(n, f)`. No mask
+  enumeration is needed — the cost is computed directly from the
+  batch composition.
+* The empty batch `B = ∅` scores `J = 0` and is always feasible,
+  serving as the default when nothing else improves the objective.
+  (An empty pick also means no forward pass, so `ET = 0`.)
+* `f_max` is the largest supported SM clock; it is only read when the
+  batch is empty (so that the frequency is deterministic even on idle
+  iterations and the NVML-lock call has something to write).
 
-1. **Define per-request adjusted utility.**
-   ```
-   v_{i,n}(f) = f_{i,n}  −  β · P(f) · t_q(n, f)
-   ```
-   (Note: `t_q(n, f)` is the **per-request** piece — the per-batch
-   overhead is accounted for separately below.)
+### 3.2 Complexity and practical cap
 
-2. **Restrict the candidate set** to
-   ```
-   C(M) = { all prefill requests in W_i }                if M = prefill_only
-        = { all decode  requests in R_i }                if M = decode_only
-        = R_i ∪ W_i                                      if M = mixed
-   ```
-   For `M = mixed`, discard any feasible solution that does not include
-   at least one prefill **and** at least one decode (otherwise the mask
-   is wrong); the other two masks are self-consistent by construction.
+A raw enumeration is `|F|_sub · 2^{|N_i|}`. With `|F|_sub ≈ 14` and
+`|N_i| = 20` this is ≈ 1.5 × 10⁷ evaluations per iteration, which is
+feasible in Python (tens of milliseconds) but grows dangerously past
+`|N_i| ≥ 22`. We therefore **cap the enumeration set** at
+`ENUM_CAP` (env `VLLM_ENERGY_ENUM_CAP`, default **20**):
 
-3. **Compute the batch overhead and tightened time budget.**
-   ```
-   T_ovh(M, f) = (w_pf / f)    · 1{M contains a prefill}
-               + (w_dec / f^α) · 1{M contains a decode}
-   η'(M, f)    = η − T_ovh(M, f) − t_c           # budget left for the sum of t_q
-   ```
-   If `η'(M, f) ≤ 0` this `(f, M)` pair is infeasible — skip it.
+```
+if |N_i| > ENUM_CAP:
+    # pre-trim by instantaneous utility f_{i,n}; ties broken by
+    # shorter t_q(n, f_max) so fast-to-serve requests survive.
+    N_i ← top-ENUM_CAP of N_i by f_{i,n}
+    log.warning("enum cap fired: %d → %d", orig, ENUM_CAP)
+```
 
-4. **Solve the 2-D 0/1 knapsack restricted to C(M):**
-   ```
-   B(f, M) = argmax_{B ⊆ C(M)}  sum_{n ∈ B} v_{i,n}(f)
-            s.t.                sum_{n ∈ B} ℓ_{i,n}  ≤ L_max,
-                                sum_{n ∈ B} t_q(n, f) ≤ η'(M, f)
-   ```
+Pre-trimming by `f_{i,n}` is justified: `f_{i,n}` is strictly
+increasing in deadline-urgency, so the cap preserves every
+close-to-violating request. The cap can be raised if concurrency
+stays below the default throughout a run.
 
-5. **Evaluate the full objective.**
-   ```
-   J(f, M) = sum_{n ∈ B(f, M)} v_{i,n}(f)
-             − β · P(f) · ( T_ovh(M, f) + t_c )
-   ```
+**Timing instrumentation.** The scheduler measures the wall-clock
+cost of every `solve()` call (`solve_ms`) and the wall-clock cost of
+the batch the call produced (`exec_ms`, the elapsed time between
+successive `schedule()` entries — see §7.9). Both are written to the
+per-iteration log so that `metrics_collector.py` can report the mean
+`solve_ms / exec_ms` ratio (see §1).
 
-Then pick `(f*, M*) = argmax_{f, M} J(f, M)` and `B* = B(f*, M*)`.
-
-> If `B(f, M)` ends up empty or violates the mask consistency check
-> (e.g. `mixed` with only decodes chosen), treat that `(f, M)` as
-> infeasible and skip. The `M = decode_only` case always dominates a
-> would-be empty-prefill `mixed` case, so no opportunity is lost.
-
-**Knapsack solver** — use the utility-density greedy (pseudo-optimal
-for this formulation and `O(|C(M)| · log |C(M)|)` per `(f, M)` pair):
-sort by `v_{i,n}(f) / max(ℓ_{i,n} / L_max, t_q(n, f) / η'(M, f))` and
-add while both constraints hold. Skip any request with `v_{i,n}(f) ≤ 0`.
-
-Outer enumeration cost: `|F| · 3`. With the default `FREQ_STRIDE=4`
-(≈14 candidate frequencies after subsampling) this is ~42 knapsack
-solves per scheduling iteration, well within the millisecond-scale
-budget the paper's algorithm targets.
-
-### 3.1 KV-cache post-filter (paper does not constrain this; we add it)
+### 3.3 KV-cache post-filter (paper does not constrain this; we add it)
 
 After `B*` is chosen, query vLLM's KV-cache manager for the number of
 free blocks. If the blocks required by `B*` exceed the free pool,
-repeatedly remove from `B*` the request with the smallest `v_{i,n}(f*)`
-until `B*` fits. Running-queue requests not selected in `B*` this
-iteration follow vLLM's existing **swap-to-CPU** preemption path.
+repeatedly remove from `B*` the request with the smallest
+`f_{i,n} − β · P(f*) · t_q(n, f*)` until `B*` fits. Running-queue
+requests not selected in `B*` this iteration follow vLLM's existing
+**swap-to-CPU** preemption path.
 
-### 3.2 Frequency switching
+### 3.4 Frequency switching
 
 Use `pynvml.nvmlDeviceSetGpuLockedClocks(handle, f*, f*)` right before
 the iteration executes. Cache the last value and skip the NVML call if
@@ -407,7 +420,7 @@ feel free to add logging, docstrings, and type hints.
 ├── vllm_patches/
 │   ├── energy_model.py              # 7.7 — fitted coefficients + per-request time
 │   ├── frequency_controller.py      # 7.8 — pynvml wrapper
-│   ├── energy_scheduler.py          # 7.9 — the frequency-first scheduler
+│   ├── energy_scheduler.py          # 7.9 — the brute-force (B, f) scheduler
 │   ├── __init__.py
 │   ├── apply_patch.sh               # 7.10 — installs the package into vLLM
 │   └── unapply_patch.sh
@@ -431,11 +444,17 @@ A Bash script at the project root with:
 * Runs **two sub-experiments** (or one, depending on `--mode`):
   default scheduler then custom scheduler, on the same trace.
   For each:
-    1. Launches the vLLM server with the three fixed flags in §5.
+    1. Launches the vLLM server with the three fixed flags in §5. In
+       `custom` mode, exports the `VLLM_ENERGY_*` env vars listed below
+       — including `VLLM_ENERGY_ITER_LOG=results/$TAG/iter_custom.log`
+       — **before** the server starts.
     2. Starts the power logger in the background.
     3. Runs the workload sender.
     4. Stops the power logger and the server; resets GPU clocks.
     5. Runs `metrics_collector.py` to produce `summary_<label>.json`.
+       In `custom` mode it passes `--iter-log results/$TAG/iter_custom.log`;
+       in `default` mode it passes no `--iter-log` (the ratio is
+       reported as 0).
 * Finally calls `compare_results.py` to produce `comparison.csv`.
 
 **Required user knobs** (all must appear and be tunable):
@@ -464,6 +483,7 @@ A Bash script at the project root with:
 | η (ms, fixed) or empty → `min_slack` | `ETA_MS`    | `""` |
 | `L_max`              | `LMAX`                      | `0` (⇒ inherit vLLM `max_num_batched_tokens`) |
 | freq-candidate stride| `FREQ_STRIDE`               | `4` |
+| brute-force cap      | `ENUM_CAP`                  | `20`  (see §3.2) |
 | `max_model_len`      | `MAX_MODEL_LEN`             | `8192` |
 | `max_num_seqs`       | `MAX_NUM_SEQS`              | `64` |
 | gpu-mem util         | `GPU_MEM_UTIL`              | `0.90` |
@@ -479,10 +499,16 @@ VLLM_ENERGY_W_TTFT=$W_TTFT
 VLLM_ENERGY_W_TPOT=$W_TPOT
 VLLM_ENERGY_LMAX=$LMAX
 VLLM_ENERGY_FREQ_STRIDE=$FREQ_STRIDE
+VLLM_ENERGY_ENUM_CAP=$ENUM_CAP
 VLLM_ENERGY_ETA_MODE={fixed if ETA_MS set else min_slack}
 VLLM_ENERGY_ETA_MS=$ETA_MS (only when non-empty)
 VLLM_ENERGY_GPU_INDEX=0     # always 0 inside CUDA_VISIBLE_DEVICES
+VLLM_ENERGY_ITER_LOG=results/$TAG/iter_custom.log
 ```
+
+The `default` mode does **not** set `VLLM_ENERGY_ITER_LOG` (the
+default scheduler never touches it). `metrics_collector.py` detects
+the file's absence and reports `mean_solve_exec_ratio = 0.0`.
 
 Provide `bash main.sh --help` that prints the knob table.
 
@@ -543,8 +569,12 @@ Must flush after every row and stop cleanly on SIGTERM / SIGINT.
 
 ### 7.5 `scripts/metrics_collector.py`
 
-Input: `--requests results.jsonl --power power.csv --label <default|custom>
---output summary.json`.
+Input: `--requests results.jsonl --power power.csv
+--iter-log iter.log --label <default|custom> --output summary.json`.
+
+`--iter-log` may be missing (`default` mode never produces one) — the
+collector must treat that case as "no iteration data" and emit the
+ratio as **0.0** (per §1).
 
 Output JSON fields:
 
@@ -553,7 +583,8 @@ label, num_completed, num_failed,
 mean_ttft_ms,           mean_tpot_ms,
 mean_ttft_violation_ms, mean_tpot_violation_ms,
 ttft_slo_attainment,    tpot_slo_attainment,
-mean_power_w,           total_energy_j
+mean_power_w,           total_energy_j,
+mean_solve_exec_ratio        # mean_i [solve_ms_i / exec_ms_i]; 0 for default
 ```
 
 Violations are `mean_n [max(0, actual − SLO)]` over *completed* requests
@@ -561,10 +592,31 @@ Violations are `mean_n [max(0, actual − SLO)]` over *completed* requests
 trapezoidal rule over the window `[first-send, last-complete]`, using
 the power CSV's wall-clock timestamps.
 
+The `mean_solve_exec_ratio` field is computed as:
+
+```python
+def solve_exec_ratio(iter_log_path: Optional[str]) -> float:
+    if not iter_log_path or not os.path.exists(iter_log_path):
+        return 0.0                             # default scheduler → 0
+    ratios = []
+    with open(iter_log_path) as f:
+        for line in f:
+            rec = json.loads(line)
+            solve = rec.get("solve_ms")
+            exec_ = rec.get("exec_ms")
+            if solve is None or exec_ is None or exec_ <= 0.0:
+                continue                       # first/last iter, or no batch
+            ratios.append(solve / exec_)
+    return float(sum(ratios) / len(ratios)) if ratios else 0.0
+```
+
 ### 7.6 `scripts/compare_results.py`
 
 Reads two summary JSONs and prints a side-by-side table; also writes
-`comparison.csv`. Row order: the fields above in the listed order.
+`comparison.csv` with header `metric,default,custom` and one row per
+metric in §7.5's listed order. The row for `mean_solve_exec_ratio`
+must appear in the output even though it is `0.0` for `default` —
+this is the explicit contract from §1.
 
 ### 7.7 `vllm_patches/energy_model.py`
 
@@ -694,7 +746,9 @@ class EnergySchedConfig:
     default_tpot_ms: float = 200.0
     freq_candidates: Optional[List[int]] = None
     freq_stride: int = 1
+    enum_cap: int = 20              # |N_i| brute-force cap (§3.2)
     log_every_n: int = 50
+    iter_log_path: Optional[str] = None   # JSONL per-iteration log; see below
     @classmethod
     def from_env(cls): ...           # reads VLLM_ENERGY_* env vars
 
@@ -714,78 +768,69 @@ def instant_utility(r: ReqView, cfg) -> float:         # eq. 1, 2, 3
     slack_ms = r.deadline_ms - r.wait_ms
     return r_n * math.exp(-slack_ms / 1000.0)          # slack in seconds
 
-def adjusted_utility(r, cfg, f_mhz, latency, power) -> Tuple[float, float]:
-    """Returns (v_{i,n}(f), t_q(n, f)).
+def request_score(r, cfg, f_mhz, latency, power) -> Tuple[float, float]:
+    """Returns (f_{i,n}, t_q(n, f)).
 
-    Per §3 the per-batch overhead w_pf / w_dec / t_c is accounted for
-    *outside* this function (once per (f, M) pair) — this routine only
-    combines the per-request t_q piece with the energy-cost term.
+    The per-request score `f_{i,n}` is the baseline utility from eq. 1.
+    The per-request time `t_q(n, f)` is the per-request piece of
+    ET_i(B, f). The brute-force solver sums both of these over the
+    candidate batch and adds T_ovh + t_c on top (see §3).
     """
     t_q = per_request_time_ms(latency, f_mhz, r.is_prefill, r.l_q, r.l_kv)
-    f_in = instant_utility(r, cfg)
-    v = f_in - cfg.beta * power.power_watts(f_mhz) * t_q
-    return v, t_q
+    return instant_utility(r, cfg), t_q
 
-def greedy_knapsack_2d(reqs, values, times_ms, tokens,
-                       Lmax, eta_ms) -> List[int]:
-    # utility-density greedy; skip v<=0
-    ...
-
-class FrequencyFirstSolver:
-    """Enumerates (f, M) ∈ F × {prefill_only, decode_only, mixed} and
-    calls a 2-D 0/1 knapsack per pair. See §3."""
+class BruteForceSolver:
+    """Direct enumeration over (B, f). See §3."""
     def __init__(self, cfg, latency, power, freq_candidates): ...
+
     def solve(self, reqs, Lmax) -> Tuple[float, list, float]:
         """
         Returns (f_star, chosen_batch, et_pred).
 
         Pseudocode:
 
-            best = (-inf, None, None, None)
-            has_prefill_any = any(r.is_prefill for r in reqs)
-            has_decode_any  = any(not r.is_prefill for r in reqs)
-            masks = []
-            if has_prefill_any: masks.append("prefill_only")
-            if has_decode_any:  masks.append("decode_only")
-            if has_prefill_any and has_decode_any: masks.append("mixed")
+            # 1. Apply the ENUM_CAP pre-trim (§3.2).
+            if len(reqs) > cfg.enum_cap:
+                reqs = sorted(reqs,
+                              key=lambda r: instant_utility(r, cfg),
+                              reverse=True)[:cfg.enum_cap]
+                log.warning("enum cap fired: %d > %d", orig_len, cfg.enum_cap)
 
-            for f in freq_candidates[::cfg.freq_stride]:
-                P_f = power.power_watts(f)
-                # per-request values / times depend only on f, not M
-                v_t = [adjusted_utility(r, cfg, f, latency, power) for r in reqs]
-                for M in masks:
-                    has_p = M in ("prefill_only", "mixed")
-                    has_d = M in ("decode_only",  "mixed")
-                    T_ovh = batch_overhead_ms(latency, f, has_p, has_d)
-                    eta_left = cfg.eta_ms - T_ovh - latency.t_c
-                    if eta_left <= 0:
+            cands = freq_candidates[::cfg.freq_stride]
+            f_max = max(cands)
+            # fallback: empty batch at top clock, score 0
+            best = (0.0, f_max, [], 0.0)
+
+            N = len(reqs)
+            # pre-compute per-(request, freq) values; O(N · |F_sub|)
+            f_in = [instant_utility(r, cfg) for r in reqs]
+            tq_tbl = {f: [per_request_time_ms(latency, f, r.is_prefill,
+                                              r.l_q, r.l_kv)
+                          for r in reqs]
+                      for f in cands}
+
+            # 2. Enumerate 2^N subsets via bitmask.
+            for mask in range(1 << N):          # includes mask = 0 (empty)
+                members = [i for i in range(N) if mask & (1 << i)]
+                tokens  = sum(reqs[i].l_q for i in members)
+                if tokens > Lmax:                  # eq. 5
+                    continue
+                has_p = any(reqs[i].is_prefill      for i in members)
+                has_d = any(not reqs[i].is_prefill  for i in members)
+                sum_f = sum(f_in[i] for i in members)
+
+                for f in cands:
+                    P_f   = power.power_watts(f)
+                    sum_t = sum(tq_tbl[f][i] for i in members)
+                    ET    = sum_t + batch_overhead_ms(latency, f,
+                                                      has_p, has_d) \
+                                 + (latency.t_c if members else 0.0)
+                    if ET > cfg.eta_ms:            # eq. 6
                         continue
-                    # restrict candidates to C(M)
-                    idxs = [i for i, r in enumerate(reqs)
-                            if (M != "prefill_only" or r.is_prefill)
-                            and (M != "decode_only"  or not r.is_prefill)]
-                    values  = [v_t[i][0] for i in idxs]
-                    times   = [v_t[i][1] for i in idxs]
-                    tokens  = [reqs[i].l_q for i in idxs]
-                    picked  = greedy_knapsack_2d(idxs, values, times, tokens,
-                                                 Lmax, eta_left)
-                    # mask-consistency check for "mixed": require at
-                    # least one prefill AND one decode among picked
-                    if M == "mixed":
-                        chosen_reqs = [reqs[i] for i in picked]
-                        if not (any(r.is_prefill for r in chosen_reqs)
-                                and any(not r.is_prefill for r in chosen_reqs)):
-                            continue
-                    sum_v = sum(values[j] for j in range(len(idxs))
-                                if idxs[j] in picked)   # or track directly
-                    J = sum_v - cfg.beta * P_f * (T_ovh + latency.t_c)
+                    J = sum_f - cfg.beta * P_f * ET
                     if J > best[0]:
-                        et_pred = sum(times[j] for j in range(len(idxs))
-                                      if idxs[j] in picked) + T_ovh + latency.t_c
-                        best = (J, f, picked, et_pred)
+                        best = (J, f, members, ET)
 
-            if best[1] is None:
-                return freq_candidates[-1], [], 0.0    # empty batch fallback
             _, f_star, picked, et_pred = best
             return f_star, [reqs[i] for i in picked], et_pred
         """
@@ -806,23 +851,75 @@ def make_energy_scheduler_class():
             self._power   = load_power_params()
             self._freq_ctl = get_controller()
             cands = self._cfg.freq_candidates or self._freq_ctl.supported_clocks() or [1410]
-            self._solver = FrequencyFirstSolver(
+            self._solver = BruteForceSolver(
                 self._cfg, self._latency, self._power, cands)
             if self._cfg.Lmax <= 0:
                 self._cfg.Lmax = int(getattr(
                     self.scheduler_config, "max_num_batched_tokens",
                     getattr(self.scheduler_config, "max_model_len", 8192)))
+            # Iteration log: one JSON line per schedule() call.
+            # Contains {iter, solve_ms, exec_ms, |B|, f_star, et_pred}.
+            # Path comes from cfg.iter_log_path (default: $TAG_DIR/iter.log).
+            self._iter_log = _open_iter_log(self._cfg.iter_log_path)
+            self._prev_exit_t = None
+            self._iter = 0
 
         def schedule(self):
-            now_ms = time.monotonic() * 1000.0
+            t_enter = time.monotonic()
+            # exec_ms_i = wall-clock cost of the PREVIOUS batch, measured as
+            # the gap between schedule() exit last iteration and schedule()
+            # entry this iteration. This is the actual forward-pass cost
+            # (model execution + update) observed by the engine loop.
+            exec_ms = (
+                (t_enter - self._prev_exit_t) * 1000.0
+                if self._prev_exit_t is not None else None
+            )
+
+            now_ms = t_enter * 1000.0
             reqs   = self._build_request_views(now_ms)
-            f_star, chosen, _ = self._solver.solve(reqs, self._cfg.Lmax)
+
+            t_solve0 = time.monotonic()
+            f_star, chosen, et_pred = self._solver.solve(reqs, self._cfg.Lmax)
+            solve_ms = (time.monotonic() - t_solve0) * 1000.0
+
             self._freq_ctl.set_frequency(int(f_star))
             chosen = self._kv_evict(chosen, f_star)
-            return self._materialise_batch(chosen, f_star)
+            out = self._materialise_batch(chosen, f_star)
+
+            # Log the ratio data *lagged* by one iteration: this iter's
+            # solve_ms pairs with NEXT iter's exec_ms. We therefore flush
+            # the PREVIOUS record (which was waiting for this exec_ms) now,
+            # and stash the current solve_ms for next time.
+            if self._prev_record is not None and exec_ms is not None:
+                rec = self._prev_record
+                rec["exec_ms"] = exec_ms
+                self._iter_log.write(json.dumps(rec) + "\n")
+                self._iter_log.flush()
+            self._prev_record = {
+                "iter": self._iter,
+                "solve_ms": solve_ms,
+                "batch_size": len(chosen),
+                "f_star": int(f_star),
+                "et_pred_ms": et_pred,
+            }
+            self._iter += 1
+            self._prev_exit_t = time.monotonic()
+            return out
         ...
     return EnergyScheduler
 ```
+
+**Iteration log format** — one JSON object per line:
+```
+{"iter": 0, "solve_ms": 3.21, "exec_ms": 87.4, "batch_size": 6,
+ "f_star": 1140, "et_pred_ms": 85.0}
+```
+The default path is `$RESULTS_DIR/iter_custom.log`; `main.sh` sets
+`VLLM_ENERGY_ITER_LOG` to that path before launching the server.
+The very first iteration has no `exec_ms` (nothing ran before it) and
+is **not** written; the *last* iteration's `exec_ms` is likewise
+unobservable through this mechanism and is dropped. Both losses are
+`O(1)` across a run of thousands of iterations.
 
 Helper methods inside `EnergyScheduler`:
 
@@ -963,6 +1060,13 @@ exact run without reading `experiment_instruction.md`.
 * The final `comparison.csv` has two data columns (`default`, `custom`)
   and reasonable values (mean TTFT > 0, mean power ∈ [50, 350] W for
   A800, violations ≥ 0).
+* The `mean_solve_exec_ratio` row in `comparison.csv` is exactly `0`
+  under `default` and strictly positive (and well below 1.0 — otherwise
+  the solver dominates the forward pass and the brute-force cap should
+  be lowered) under `custom`.
+* The iteration log `results/<TAG>/iter_custom.log` exists after a
+  custom-mode run and has at least a few hundred lines; every line
+  parses as JSON with both `solve_ms` and `exec_ms` present.
 
 If any of these fail, fix the underlying issue **before** writing
 `experiment.md`.
