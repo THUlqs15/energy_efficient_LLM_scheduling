@@ -195,9 +195,14 @@ P(f) = k3 · f^3  +  k2 · f^2  +  k1 · f  +  k0                 (Watts, f in M
 Eq. 4–6 is a mixed-integer problem, but both decision variables live
 on small sets in our setting:
 
-* `f` ranges over a discrete, hardware-imposed set of SM clocks
-  (|F| = 82 on A800-SXM4; after `FREQ_STRIDE=4` subsampling we evaluate
-  ~14 of them).
+* `f` ranges over a discrete, hardware-imposed set of SM clocks.
+  A800-SXM4 exposes |F| = 82 supported clocks (see §4.3). `FREQ_STRIDE`
+  is the Python-slice stride used to subsample this list: the solver
+  evaluates `F[::FREQ_STRIDE]`. With the default `FREQ_STRIDE=4` that
+  is ⌈82/4⌉ = 21 candidate frequencies; setting it to 1 evaluates all
+  82. If the scheduler additionally restricts itself to the
+  profiling-trusted range `[510, 1335] MHz` (56 clocks), the same
+  stride yields ⌈56/4⌉ = 14 candidates.
 * `B` is a subset of the per-iteration candidate set `N_i = R_i ∪ W_i`.
   At the target load `|N_i|` is small (our workloads keep it in the
   mid-teens; see the practical cap below).
@@ -240,10 +245,10 @@ Rationale:
 
 ### 3.2 Complexity and practical cap
 
-A raw enumeration is `|F|_sub · 2^{|N_i|}`. With `|F|_sub ≈ 14` and
-`|N_i| = 20` this is ≈ 1.5 × 10⁷ evaluations per iteration, which is
-feasible in Python (tens of milliseconds) but grows dangerously past
-`|N_i| ≥ 22`. We therefore **cap the enumeration set** at
+A raw enumeration is `|F|_sub · 2^{|N_i|}`. With `|F|_sub = 21`
+(default `FREQ_STRIDE=4`) and `|N_i| = 20` this is ≈ 2.2 × 10⁷
+evaluations per iteration, which is feasible in pure Python (tens of
+milliseconds) but grows dangerously past `|N_i| ≥ 22`. We therefore **cap the enumeration set** at
 `ENUM_CAP` (env `VLLM_ENERGY_ENUM_CAP`, default **20**):
 
 ```
