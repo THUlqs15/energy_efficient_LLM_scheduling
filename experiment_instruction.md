@@ -1,32 +1,46 @@
 # Experiment Instruction — Energy-Efficient LLM Scheduling on vLLM
 
-This file is self-contained. The server-side Claude Code agent that runs
-on the host with vLLM and the A800 GPU should **follow this file end to
-end** to:
+> **This file is the ONLY input the server-side Claude Code agent
+> receives.** No PDF, no profiling folders, no helper scripts, no
+> `main.sh`, no `fitted_params.json` are uploaded. Everything the
+> scheduler needs — the formulation, the fitted coefficients, the
+> algorithm, the file layout — is contained **inside this document**.
+> The agent must *create* every script, patch, and helper listed in §7
+> from scratch, following the specifications here.
 
-1. Read the formulation and fitted coefficients stated *here* (the PDF of
-   the paper is **not** uploaded to the server).
-2. Create every script / patch / helper needed, inside this project
-   folder, following the file layout specified in §7.
-3. Download the ShareGPT52K dataset from Hugging Face into this project
-   folder.
+The server-side Claude Code agent that runs on the host with vLLM and
+the A800 GPU should **follow this file end to end** to:
+
+1. Read the formulation in §2–§3 and the fitted coefficients in §4.
+   All numeric values are transcribed **literally** in this document —
+   do not look for external JSON files.
+2. Create every script / patch / helper listed in §7 inside the working
+   directory (henceforth "the project root" — typically the folder where
+   this file was uploaded). The agent creates these files; the user
+   does not supply them.
+3. Download the ShareGPT52K dataset from Hugging Face into
+   `data/sharegpt52k/` under the project root (see §6).
 4. Patch the vLLM source tree at `/home/ubuntu/lqs/vllm` in a
    **non-invasive** way: the patch must be a pure no-op unless the env
    variable `VLLM_ENERGY_SCHEDULER=1` is set.
-5. Run the experiment with the supplied `main.sh` master script.
-6. At the end, write a companion `experiment.md` file that documents the
-   **actual** workflow, the commands executed, and every file the agent
-   created or modified (including the line ranges inside vLLM that were
-   changed).
+5. Run the experiment with the `main.sh` master script **that the agent
+   itself just created in step 2**.
+6. At the end, write a companion `experiment.md` file that documents
+   the **actual** workflow, the commands executed, and every file the
+   agent created or modified (including the line ranges inside vLLM
+   that were changed).
 
 Do **all** work inside the conda environment `myvllm` (it already has
 `huggingface_hub`, `datasets`, `aiohttp`, `requests`, `pynvml`, and the
 editable vLLM install). If any of those are missing, install them with
 `pip install <pkg>` inside that env.
 
-Cleanup first: the project folder may contain an `experiment/` folder
-and an `experiment.md` file left over from an earlier draft. They are
-deprecated — run `rm -rf experiment experiment.md` before you start.
+Starting state assumption: the project root contains **only this
+`experiment_instruction.md`** (plus whatever hidden files Claude Code
+creates for itself). If earlier runs left behind an `experiment/`
+folder or `experiment.md`, remove them with
+`rm -rf experiment experiment.md` before you start — but this is a
+courtesy, not a requirement.
 
 ---
 
@@ -257,13 +271,17 @@ enough to do every iteration.
 
 ---
 
-## 4. Fitted coefficients (from the profiling artefacts in this folder)
+## 4. Fitted coefficients (transcribed from our profiling pipeline)
 
-These are the values the scheduler should use by default. If
-`VLLM_ENERGY_LATENCY_JSON` / `VLLM_ENERGY_POWER_JSON` env variables
-point at updated JSON files, prefer those.
+The numbers below were fitted off-line on the same A800-SXM4-80GB GPU
+that will run the experiment, using the conditions described in §5
+(enforce-eager, no chunked prefill, no prefix cache). **Use them as-is
+— you do not need any external JSON file.** As an optional convenience,
+the scheduler will prefer updated values if `VLLM_ENERGY_LATENCY_JSON`
+or `VLLM_ENERGY_POWER_JSON` env variables point at a JSON file written
+in the same schema, but this is never required for the default run.
 
-### 4.1 Latency model — Route B+ (from `A800_profiling/fitted_params.json`)
+### 4.1 Latency model — Route B+ (9-parameter)
 
 These are the 9-parameter Route B+ coefficients; they plug directly into
 the batch-time equation (**) of §2.2.
@@ -297,7 +315,7 @@ fit was forced to absorb into `t_c` (hence that model's 21 ms lumped
 constant). Because the term fires **once per batch, not once per
 request**, §3 enumerates the three relevant batch-type masks `M`.
 
-### 4.2 Power model  (from `power_profiling/power_result.md`)
+### 4.2 Power model (cubic fit on measured wall-clock power vs SM clock)
 
 | Symbol | Value              |
 |--------|--------------------|
@@ -371,10 +389,10 @@ the **first human message** of each conversation as the prompt.
 
 ## 7. What you (server-side Claude Code) must create
 
-Create the files below, in these exact paths (relative to the project
-folder that already contains `A800_profiling/`, `power_profiling/`,
-`LLM_scheduling.pdf`, etc.). Use the function signatures and algorithms
-described; feel free to add logging, docstrings, and type hints.
+Starting from a project root that contains only this
+`experiment_instruction.md`, create the files below in these exact
+relative paths. Use the function signatures and algorithms described;
+feel free to add logging, docstrings, and type hints.
 
 ```
 ├── main.sh                          # master runner -- user-editable knobs at the top
@@ -569,7 +587,9 @@ class LatencyParams:
     t_c:   float = 4.652569884043852
 
     @classmethod
-    def from_json(cls, path): ...           # loads from fitted_params.json
+    def from_json(cls, path): ...           # OPTIONAL override — reads a
+                                            # Route-B+ JSON file of the same
+                                            # schema; unused by default
 
 @dataclass
 class PowerParams:
@@ -621,9 +641,15 @@ def batch_time_ms(latency: LatencyParams, freq_mhz: float,
     total += latency.t_c
     return total
 
-def load_latency_params() -> LatencyParams   # respects $VLLM_ENERGY_LATENCY_JSON
-def load_power_params()   -> PowerParams     # respects $VLLM_ENERGY_POWER_JSON
+def load_latency_params() -> LatencyParams   # default: dataclass defaults;
+                                              # if $VLLM_ENERGY_LATENCY_JSON
+                                              # is set and points at a file,
+                                              # delegate to LatencyParams.from_json
+def load_power_params()   -> PowerParams     # same convention for $VLLM_ENERGY_POWER_JSON
 ```
+
+In production the JSON override is unused — the hard-coded defaults
+**are** the Route B+ fit from §4.1 / §4.2.
 
 `LatencyParams.from_json` must accept the Route B+ schema produced by
 the profiling pipeline (top-level `"params"` dict with keys `a_p`,
@@ -860,6 +886,17 @@ The intended sequence, executed inside `conda activate myvllm`:
 ```bash
 cd <project root>               # folder containing this file
 rm -rf experiment experiment.md # clean up old draft (harmless if absent)
+
+# 0. Author every file listed in §7 before running anything.
+#    This is the agent's responsibility — the project root starts
+#    with only experiment_instruction.md present.
+#    Produce:  main.sh,
+#              scripts/{prepare_dataset,workload_sender,power_logger,
+#                       metrics_collector,compare_results}.py,
+#              vllm_patches/{energy_model,frequency_controller,
+#                            energy_scheduler,__init__}.py,
+#              vllm_patches/{apply_patch,unapply_patch}.sh
+#    Verify with:  ls main.sh scripts/*.py vllm_patches/*.{py,sh}
 
 # 1. One-time setup (idempotent)
 python -c "from huggingface_hub import snapshot_download; \
