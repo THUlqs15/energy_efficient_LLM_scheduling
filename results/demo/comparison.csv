@@ -1,0 +1,10 @@
+metric,default,custom
+mean_ttft_ms,4106.25,22631.79
+mean_tpot_ms,31.83,27.83
+mean_ttft_violation_ms,1828.14,19972.38
+mean_tpot_violation_ms,0.0,0.0
+ttft_slo_attainment,0.416,0.116
+tpot_slo_attainment,1.0,1.0
+mean_power_w,349.33,331.43
+total_energy_j,28982.75,39327.93
+mean_solve_exec_ratio,0.0,0.010888
