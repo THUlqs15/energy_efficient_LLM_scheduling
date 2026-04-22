@@ -126,14 +126,9 @@ class FrequencyFirstSolver:
         self.freq_candidates = freq_candidates
 
     def solve(self, reqs: List[ReqView], Lmax: int) -> Tuple[float, list, float]:
-        # Separate running (decode) from waiting (prefill) requests.
-        # Running requests MUST be served to avoid stalling in-flight generations.
-        running_reqs = [(i, r) for i, r in enumerate(reqs) if not r.is_prefill]
-        prefill_reqs = [(i, r) for i, r in enumerate(reqs) if r.is_prefill]
-
         best = (0.0, self.freq_candidates[-1] if self.freq_candidates else 1410, [], 0.0)
-        has_prefill_any = len(prefill_reqs) > 0
-        has_decode_any = len(running_reqs) > 0
+        has_prefill_any = any(r.is_prefill for r in reqs)
+        has_decode_any = any(not r.is_prefill for r in reqs)
         masks = []
         if has_prefill_any:
             masks.append("prefill_only")
@@ -147,72 +142,44 @@ class FrequencyFirstSolver:
         if not freqs:
             freqs = self.freq_candidates
 
+        # Dynamic eta: use the tightest slack across all requests so the
+        # time budget never drops below the most urgent deadline.
+        # Falls back to cfg.eta_ms if cfg.eta_ms is larger.
+        min_slack = min(r.deadline_ms - r.wait_ms for r in reqs) if reqs else float("inf")
+        effective_eta = max(self.cfg.eta_ms, min_slack)
+
         for f in freqs:
             P_f = self.power.power_watts(f)
             v_t = [adjusted_utility(r, self.cfg, f, self.latency, self.power) for r in reqs]
             for M in masks:
-                has_p = M in ("prefill_only", "mixed")
-                has_d = M in ("decode_only", "mixed")
-                T_ovh = batch_overhead_ms(self.latency, f, has_p, has_d)
-                eta_left = self.cfg.eta_ms - T_ovh - self.latency.t_c
+                T_ovh = batch_overhead_ms(self.latency, f, M != "decode_only", M != "prefill_only")
+                eta_left = effective_eta - T_ovh - self.latency.t_c
                 if eta_left <= 0:
                     continue
 
-                # Build candidate set for knapsack:
-                # - Running (decode) requests are always mandatory
-                # - Prefill requests are optional (energy-aware selection)
-                mandatory_idxs = [i for i, r in running_reqs] if has_d else []
-                optional_idxs = [i for i, r in prefill_reqs] if has_p else []
-
-                if M == "prefill_only":
-                    idxs = optional_idxs
-                    mandatory_in_idxs = []
-                elif M == "decode_only":
-                    idxs = mandatory_idxs
-                    mandatory_in_idxs = list(range(len(idxs)))
-                else:  # mixed
-                    idxs = mandatory_idxs + optional_idxs
-                    mandatory_in_idxs = list(range(len(mandatory_idxs)))
-
-                if not idxs:
-                    continue
-
-                # Separate values/times/tokens for mandatory vs optional
+                # All requests participate equally in energy-aware knapsack
                 values = []
                 times = []
                 tok = []
-                mandatory_in_filtered = []
-                opt_offset = len(mandatory_idxs)
-                for j, i in enumerate(idxs):
-                    r = reqs[i]
+                local_map = []
+                for i, r in enumerate(reqs):
                     v, t = v_t[i]
-                    if j < opt_offset:
-                        # Mandatory item — always include
-                        # Use large positive value to guarantee selection
-                        values.append(abs(v) + 1000.0)
-                        mandatory_in_filtered.append(j)
-                    elif v <= 0:
-                        continue  # skip optional prefill with negative utility
-                    else:
-                        values.append(v)
+                    if v <= 0:
+                        continue
+                    values.append(v)
                     times.append(t)
                     tok.append(r.l_q)
+                    local_map.append(i)
 
                 if not values:
                     continue
 
                 # Run greedy knapsack
-                local_map = list(range(len(values)))
                 picked_local = greedy_knapsack_2d(
                     local_map, values, times, tok, Lmax, eta_left
                 )
 
-                # Check that all mandatory items were picked
-                mandatory_set = set(mandatory_in_filtered)
-                if mandatory_set and not mandatory_set.issubset(set(picked_local)):
-                    continue
-
-                picked = [idxs[j] for j in picked_local]
+                picked = picked_local
 
                 if M == "mixed" and picked:
                     chosen_reqs = [reqs[i] for i in picked]

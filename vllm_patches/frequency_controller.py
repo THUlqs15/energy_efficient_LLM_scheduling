@@ -24,6 +24,8 @@ class FrequencyController:
         self._gpu_idx = gpu_index
         self._last_f: Optional[int] = None
         self._clocks = self._query_supported_clocks()
+        self._mem_clocks = self._query_supported_memory_clocks()
+        self._lock_memory_clock()
 
     # -- public ----------------------------------------------------------------
 
@@ -65,7 +67,18 @@ class FrequencyController:
                 )
             except Exception:
                 pass
+        try:
+            pynvml.nvmlDeviceResetMemoryLockedClocks(self._handle)
+        except Exception:
+            try:
+                subprocess.run(
+                    ["sudo", "nvidia-smi", "-rmc", "-i", str(self._gpu_idx)],
+                    capture_output=True, text=True, timeout=5
+                )
+            except Exception:
+                pass
         self._last_f = None
+        self._last_mem = None
 
     # -- internal --------------------------------------------------------------
 
@@ -77,9 +90,10 @@ class FrequencyController:
     @staticmethod
     def _query_supported_clocks() -> list[int]:
         try:
-            return pynvml.nvmlDeviceGetSupportedGraphicsClocks(
-                pynvml.nvmlDeviceGetHandleByIndex(0)
-            )
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # nvmlDeviceGetSupportedGraphicsClocks requires a memory clock argument;
+            # passing 0 returns all supported graphics clocks.
+            return pynvml.nvmlDeviceGetSupportedGraphicsClocks(handle, 0)
         except Exception:
             pass
         # fallback: parse nvidia-smi
@@ -88,9 +102,45 @@ class FrequencyController:
                 ["nvidia-smi", "--query-supported-clocks=gr", "--format=csv,noheader"],
                 text=True,
             )
-            return [int(x.strip()) for x in out.splitlines() if x.strip()]
+            # Output may include " MHz" suffix — strip it before int()
+            clocks = []
+            for line in out.splitlines():
+                line = line.strip().replace(" MHz", "")
+                if line:
+                    clocks.append(int(line))
+            return clocks
         except Exception:
             return []
+
+    @staticmethod
+    def _query_supported_memory_clocks() -> list[int]:
+        """Returns supported memory clocks (A800 typically only reports [1593])."""
+        try:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            return pynvml.nvmlDeviceGetSupportedMemoryClocks(handle)
+        except Exception:
+            return []
+
+    def _lock_memory_clock(self):
+        """Attempt to lock memory clock to 1593 MHz (profiling baseline).
+        A800-SXM4 does not support memory clock locking — this is non-fatal.
+        The memory clock remains at its default dynamic behaviour."""
+        if not self._mem_clocks:
+            return
+        target = self._mem_clocks[0]
+        try:
+            pynvml.nvmlDeviceSetMemoryLockedClocks(self._handle, target, target)
+            self._last_mem = target
+        except Exception:
+            try:
+                subprocess.run(
+                    ["sudo", "nvidia-smi", "-lmc", f"{target},{target}",
+                     "-i", str(self._gpu_idx)],
+                    capture_output=True, text=True, timeout=5,
+                )
+            except Exception:
+                pass
+            self._last_mem = None  # unsupported — expected on A800
 
 
 @lru_cache(maxsize=1)
