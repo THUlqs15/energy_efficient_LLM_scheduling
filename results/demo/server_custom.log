@@ -868,3 +868,37 @@
 (EngineCore pid=44060) [dbg] iter=3040 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
 (EngineCore pid=44060) [energy_sched] iter=3050 f*=930 |B|=2 solve_ms=0.21 exec_ms=26.03
 (EngineCore pid=44060) [dbg] iter=3050 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3060 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3070 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3080 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3090 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3100 f*=930 |B|=2 solve_ms=0.22 exec_ms=26.03
+(EngineCore pid=44060) [dbg] iter=3100 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3110 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3120 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3130 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3140 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3150 f*=930 |B|=2 solve_ms=0.21 exec_ms=26.09
+(APIServer pid=43995) INFO 04-24 15:44:16 [loggers.py:259] Engine 000: Avg prompt throughput: 388.8 tokens/s, Avg generation throughput: 62.5 tokens/s, Running: 2 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.5%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=3150 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3160 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3170 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3180 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3190 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3200 f*=930 |B|=2 solve_ms=0.22 exec_ms=26.63
+(EngineCore pid=44060) [dbg] iter=3200 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3210 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3220 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3230 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3240 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3250 f*=930 |B|=2 solve_ms=0.21 exec_ms=26.03
+(EngineCore pid=44060) [dbg] iter=3250 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3260 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3270 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3280 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3290 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3300 f*=930 |B|=2 solve_ms=0.22 exec_ms=26.15
+(EngineCore pid=44060) [dbg] iter=3300 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3310 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3320 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3330 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
