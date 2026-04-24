@@ -70,7 +70,7 @@ class ReqView:
 def instant_utility(r: ReqView, cfg: EnergySchedConfig) -> float:
     r_n = r.w_n * (cfg.w_ttft if r.is_prefill else cfg.w_tpot)
     slack_ms = r.deadline_ms - r.wait_ms
-    return r_n * math.exp(-slack_ms / 1000.0)
+    return r_n * min(math.exp(-slack_ms / 1000.0), 5.0)
 
 
 def adjusted_utility(
@@ -78,8 +78,9 @@ def adjusted_utility(
     latency: LatencyParams, power: PowerParams,
 ) -> Tuple[float, float]:
     t_q = per_request_time_ms(latency, f_mhu, r.is_prefill, r.l_q, r.l_kv)
+    t_q_s = t_q / 1000.0  # ms → s for correct energy (Joules)
     f_in = instant_utility(r, cfg)
-    v = f_in - cfg.beta * power.power_watts(f_mhu) * t_q
+    v = f_in - cfg.beta * power.power_watts(f_mhu) * t_q_s
     return v, t_q
 
 
@@ -125,7 +126,7 @@ class FrequencyFirstSolver:
         self.power = power
         self.freq_candidates = freq_candidates
 
-    def solve(self, reqs: List[ReqView], Lmax: int) -> Tuple[float, list, float]:
+    def solve(self, reqs: List[ReqView], Lmax: int, debug_iter: int = -1) -> Tuple[float, list, float]:
         best = (0.0, self.freq_candidates[-1] if self.freq_candidates else 1410, [], 0.0)
         has_prefill_any = any(r.is_prefill for r in reqs)
         has_decode_any = any(not r.is_prefill for r in reqs)
@@ -157,12 +158,16 @@ class FrequencyFirstSolver:
                 if eta_left <= 0:
                     continue
 
-                # All requests participate equally in energy-aware knapsack
+                # Filter requests by mode — only matching requests enter knapsack
                 values = []
                 times = []
                 tok = []
                 local_map = []
                 for i, r in enumerate(reqs):
+                    if M == "prefill_only" and not r.is_prefill:
+                        continue
+                    if M == "decode_only" and r.is_prefill:
+                        continue
                     v, t = v_t[i]
                     if v <= 0:
                         continue
@@ -179,7 +184,7 @@ class FrequencyFirstSolver:
                     local_map, values, times, tok, Lmax, eta_left
                 )
 
-                picked = picked_local
+                picked = [local_map[j] for j in picked_local]
 
                 if M == "mixed" and picked:
                     chosen_reqs = [reqs[i] for i in picked]
@@ -188,7 +193,7 @@ class FrequencyFirstSolver:
                         continue
 
                 sum_v = sum(v_t[i][0] for i in picked)
-                J = sum_v - self.cfg.beta * P_f * (T_ovh + self.latency.t_c)
+                J = sum_v - self.cfg.beta * P_f * (T_ovh + self.latency.t_c) / 1000.0
                 if J > best[0]:
                     et_pred = (
                         sum(v_t[i][1] for i in picked) + T_ovh + self.latency.t_c
@@ -196,6 +201,21 @@ class FrequencyFirstSolver:
                     best = (J, f, picked, et_pred)
 
         _, f_star, picked, et_pred = best
+
+        # DEBUG: trace which mode wins and J values
+        if debug_iter >= 0 and debug_iter % 10 == 0:
+            import sys
+            n_p = sum(1 for r in reqs if r.is_prefill)
+            n_d = len(reqs) - n_p
+            n_p_ch = sum(1 for i in picked if reqs[i].is_prefill)
+            n_d_ch = len(picked) - n_p_ch
+            min_sl = min(r.deadline_ms - r.wait_ms for r in reqs) if reqs else 0
+            print(
+                f"[dbg] iter={debug_iter} all={len(reqs)}(p={n_p}d={n_d}) "
+                f"picked={len(picked)}(p={n_p_ch}d={n_d_ch}) "
+                f"f={f_star:.0f} eff_eta={min(effective_eta, self.cfg.eta_ms):.0f} "
+                f"min_sl={min_sl:.0f}",
+                file=sys.stderr, flush=True)
         return float(f_star), [reqs[i] for i in picked], et_pred
 
 
@@ -235,6 +255,7 @@ def make_energy_scheduler_class():
             self._prev_exit_t = None
             self._iter = 0
             self._prev_record = None
+            self._last_exec = {}
 
         def _build_request_views(self, now_ms: float) -> List[ReqView]:
             reqs: List[ReqView] = []
@@ -271,8 +292,13 @@ def make_energy_scheduler_class():
                     ttft = self._cfg.default_ttft_ms
                     tpot = self._cfg.default_tpot_ms
                     w_n = self._cfg.default_w_n
-                arrival = getattr(req, "arrival_time", now_ms / 1000.0) * 1000.0
-                wait_ms = now_ms - arrival
+                req_id = getattr(req, "request_id", id(req))
+                last_exec_ms = self._last_exec.get(req_id)
+                if last_exec_ms is not None:
+                    wait_ms = now_ms - last_exec_ms
+                else:
+                    arrival = getattr(req, "arrival_time", now_ms / 1000.0) * 1000.0
+                    wait_ms = now_ms - arrival
                 l_kv = getattr(req, "num_computed_tokens", 0)
                 l_q = 1
                 kv_blocks = (l_kv + block_size) // block_size
@@ -305,7 +331,7 @@ def make_energy_scheduler_class():
                     t_q = per_request_time_ms(
                         self._latency, f_mhu, r.is_prefill, r.l_q, r.l_kv
                     )
-                    v = instant_utility(r, self._cfg) - self._cfg.beta * self._power.power_watts(f_mhu) * t_q
+                    v = instant_utility(r, self._cfg) - self._cfg.beta * self._power.power_watts(f_mhu) * (t_q / 1000.0)
                     v_t.append((v, r))
                 v_t.sort(key=lambda x: x[0])
                 chosen = [r for _, r in v_t[1:]]
@@ -341,7 +367,7 @@ def make_energy_scheduler_class():
             now_ms = time.time() * 1000.0
             reqs = self._build_request_views(now_ms)
             t_solve0 = time.monotonic()
-            f_star, chosen, et_pred = self._solver.solve(reqs, self._cfg.Lmax)
+            f_star, chosen, et_pred = self._solver.solve(reqs, self._cfg.Lmax, self._iter)
             solve_ms = (time.monotonic() - t_solve0) * 1000.0
             self._freq_ctl.set_frequency(int(f_star))
             # Fallback to default scheduling if solver returns empty batch
@@ -350,19 +376,25 @@ def make_energy_scheduler_class():
             else:
                 chosen = self._kv_evict(chosen, f_star)
                 out = self._materialise_batch(chosen)
+                for r in chosen:
+                    req_id = getattr(r.handle, "request_id", id(r.handle))
+                    self._last_exec[req_id] = now_ms
             if self._iter_log is not None:
                 if self._prev_record is not None and exec_ms is not None:
                     rec = self._prev_record
                     rec["exec_ms"] = exec_ms
                     self._iter_log.write(json.dumps(rec) + "\n")
                     self._iter_log.flush()
-                self._prev_record = {
-                    "iter": self._iter,
-                    "solve_ms": solve_ms,
-                    "batch_size": len(chosen),
-                    "f_star": int(f_star),
-                    "et_pred_ms": et_pred,
-                }
+                if chosen:
+                    self._prev_record = {
+                        "iter": self._iter,
+                        "solve_ms": solve_ms,
+                        "batch_size": len(chosen),
+                        "f_star": int(f_star),
+                        "et_pred_ms": et_pred,
+                    }
+                else:
+                    self._prev_record = None
                 self._iter += 1
             self._prev_exit_t = time.monotonic()
             if self._iter_log is not None and self._iter % self._cfg.log_every_n == 0:

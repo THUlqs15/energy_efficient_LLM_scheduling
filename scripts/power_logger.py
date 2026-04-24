@@ -39,7 +39,6 @@ def main():
     with open(args.output, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["timestamp_s", "power_w", "sm_clock_mhz", "utilization_pct"])
-        t0 = time.time()
         while not _stop:
             try:
                 power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # mW → W
@@ -47,7 +46,7 @@ def main():
                 util = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
             except Exception:
                 continue
-            writer.writerow([f"{time.time() - t0:.4f}", f"{power:.2f}", clock, util])
+            writer.writerow([f"{time.time():.6f}", f"{power:.2f}", clock, util])
             f.flush()
             time.sleep(args.interval)
 

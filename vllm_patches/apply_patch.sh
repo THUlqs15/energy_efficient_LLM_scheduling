@@ -5,6 +5,10 @@ VLLM_DIR="${1:?Usage: apply_patch.sh <vllm-dir>}"
 
 echo "[apply_patch] Installing energy_sched package into ${VLLM_DIR} ..."
 
+# 0. Clear Python bytecode cache so Python doesn't load stale .pyc files
+rm -rf "${VLLM_DIR}/vllm/energy_sched/__pycache__"
+find "${VLLM_DIR}/vllm/energy_sched" -name '*.pyc' -delete 2>/dev/null || true
+
 # 1. Copy package files
 mkdir -p "${VLLM_DIR}/vllm/energy_sched"
 cp "$(dirname "$0")/__init__.py"       "${VLLM_DIR}/vllm/energy_sched/__init__.py"

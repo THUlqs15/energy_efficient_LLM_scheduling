@@ -9,7 +9,9 @@ from __future__ import annotations
 import json
 import os
 import random
+import shutil
 from pathlib import Path
+from huggingface_hub import snapshot_download
 
 
 # ==============================================================================
@@ -18,28 +20,28 @@ from pathlib import Path
 OUTPUT = "trace.jsonl"
 # Path of the generated JSONL file (one request per line).
 
-NUM_REQUESTS = 500
+NUM_REQUESTS = 400
 # Number of requests to sample into the trace.
 
-RATE_QPS = 8
+RATE_QPS = 10
 # Arrival rate in requests/second. Record i arrives at time i / RATE_QPS.
 
-TTFT_MEAN_MS = 3000.0
+TTFT_MEAN_MS = 1000.0
 # Mean TTFT SLO requirement (ms). Sampled from a truncated normal distribution.
 
-TTFT_STD_MS = 500.0
+TTFT_STD_MS = 200.0
 # Std dev of the TTFT SLO requirement (ms).
 
-TPOT_MEAN_MS = 200.0
+TPOT_MEAN_MS = 50.0
 # Mean TPOT SLO requirement (ms).
 
-TPOT_STD_MS = 40.0
+TPOT_STD_MS = 20.0
 # Std dev of the TPOT SLO requirement (ms).
 
 MIN_OUTPUT_TOKENS = 64
 # Minimum number of output tokens per request (uniformly sampled).
 
-MAX_OUTPUT_TOKENS = 512
+MAX_OUTPUT_TOKENS = 1024
 # Maximum number of output tokens per request (uniformly sampled).
 
 MIN_PROMPT_CHARS = 64
@@ -53,7 +55,32 @@ SEED = 42
 
 DATASET_DIR = "data/sharegpt52k"
 # Local path to the ShareGPT52K dataset (downloaded once via huggingface_hub).
+
+REPO_ID = "RyokoAI/ShareGPT52K"
+# Hugging Face repository ID (re-downloaded if Git LFS pointers detected).
 # ==============================================================================
+
+
+def _ensure_dataset():
+    ds_dir = Path(DATASET_DIR)
+    if not ds_dir.is_dir():
+        print(f"[prepare_dataset] Dataset not found — downloading from {REPO_ID} ...")
+        snapshot_download(repo_id=REPO_ID, repo_type="dataset",
+                          local_dir=DATASET_DIR, local_dir_use_symlinks=False)
+        return
+
+    # Check for Git LFS pointer files (134 bytes, starts with "version")
+    for fpath in ds_dir.glob("*.json"):
+        if fpath.stat().st_size < 200:
+            with open(fpath) as f:
+                header = f.read(40)
+            if header.startswith("version "):
+                print(f"[prepare_dataset] Git LFS pointers detected — "
+                      f"re-downloading dataset ...")
+                shutil.rmtree(ds_dir)
+                snapshot_download(repo_id=REPO_ID, repo_type="dataset",
+                                  local_dir=DATASET_DIR, local_dir_use_symlinks=False)
+                return
 
 
 def truncated_normal(mean: float, std: float, low: float = 1.0) -> float:
@@ -65,6 +92,8 @@ def truncated_normal(mean: float, std: float, low: float = 1.0) -> float:
 
 def main():
     random.seed(SEED)
+
+    _ensure_dataset()
 
     # Load dataset
     candidates = []

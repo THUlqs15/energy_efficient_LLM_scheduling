@@ -119,10 +119,18 @@ Per-iteration problem (same as the paper, with `ET_i(B, f)` now given
 by (**) in §2.2):
 
 ```
-max_{B, f}   sum_{n ∈ B} f_{i,n}  −  β · P(f) · ET_i(B, f)           (eq. 4)
+max_{B, f}   sum_{n ∈ B} f_{i,n}  −  β · P(f) · ET_i(B, f) / 1000   (eq. 4)
 s.t.         sum_{n ∈ B} ℓ_{i,n}  ≤  L_max                            (eq. 5)
              ET_i(B, f)            ≤  η                               (eq. 6)
 ```
+
+**Units convention for the energy term**: `ET_i(B, f)` and all its
+sub-terms (`t_q`, `T_ovh`, `t_c`) are computed in **milliseconds** (the
+natural unit of the latency model in §2.2). The `/ 1000` in eq. 4
+converts to seconds so that `β · P(W) · ET(s)` yields **Joules**. This
+division is applied consistently in `adjusted_utility` (per-request
+piece) and in the batch-overhead piece of the objective `J(f, M)`. The
+constraints (eq. 5, 6) stay in milliseconds.
 
 where `ℓ_{i,n} = l_q` is the number of tokens processed in this
 iteration, `β` is the energy balance parameter, and `η` is a
@@ -221,10 +229,12 @@ For every candidate SM frequency `f ∈ F[::FREQ_STRIDE]` and every mask
 
 1. **Define per-request adjusted utility.**
    ```
-   v_{i,n}(f) = f_{i,n}  −  β · P(f) · t_q(n, f)
+   v_{i,n}(f) = f_{i,n}  −  β · P(f) · t_q(n, f) / 1000
    ```
-   `t_q(n, f)` is the **per-request** piece only — the per-batch
-   overhead is accounted for separately below.
+   `t_q(n, f)` is in milliseconds; the `/ 1000` converts to seconds
+   so the energy term is in Joules.  Only the **per-request** piece
+   appears here — the per-batch overhead is accounted for separately
+   below.
 
 2. **Restrict the candidate set** to
    ```
@@ -240,8 +250,14 @@ For every candidate SM frequency `f ∈ F[::FREQ_STRIDE]` and every mask
    η'(M, f)    = η − T_ovh(M, f) − t_c        # budget left for Σ t_q
    ```
    If `η'(M, f) ≤ 0` this `(f, M)` pair is infeasible — skip it.
+   **Implementation note**: `η` is dynamically tightened to
+   `max(cfg.eta_ms, min_r (deadline_ms - wait_ms))` so the time
+   budget never drops below the most urgent request's slack.
 
 4. **Solve the 2-D 0/1 knapsack restricted to `C(M)`:**
+   During knapsack candidate construction, apply mode filtering:
+   - `prefill_only`: skip all decode requests from `C(M)`.
+   - `decode_only`: skip all prefill requests from `C(M)`.
    ```
    B(f, M) = argmax_{B ⊆ C(M)}  sum_{n ∈ B} v_{i,n}(f)
             s.t.                sum_{n ∈ B} ℓ_{i,n}     ≤ L_max,
@@ -251,8 +267,11 @@ For every candidate SM frequency `f ∈ F[::FREQ_STRIDE]` and every mask
 5. **Evaluate the full objective.**
    ```
    J(f, M) = sum_{n ∈ B(f, M)} v_{i,n}(f)
-             − β · P(f) · ( T_ovh(M, f) + t_c )
+             − β · P(f) · ( T_ovh(M, f) + t_c ) / 1000
    ```
+   (The `/ 1000` converts the ms overhead to seconds, matching the
+   per-request energy term inside `v_{i,n}`.)
+
 
 Then pick `(f*, M*) = argmax_{f, M} J(f, M)` and `B* = B(f*, M*)`.
 
@@ -385,7 +404,7 @@ Memory clock is hardware-fixed at 1593 MHz on A800.
 | Conda env         | `myvllm`                                    |
 | vLLM source       | `/home/ubuntu/lqs/vllm` (editable install)  |
 | Model             | `/home/ubuntu/lqs/LLM_model` (Qwen3-14B)    |
-| vLLM flags (always) | `--enforce-eager` (disables CUDA graphs),<br>`--no-enable-chunked-prefill`,<br>`--no-enable-prefix-caching` |
+| vLLM flags (always) | `--enforce-eager` (disables CUDA graphs),<br>`--no-async-scheduling` (scheduler sees all requests),<br>`--no-enable-chunked-prefill`,<br>`--no-enable-prefix-caching` |
 | Root access       | required for `nvmlDeviceSetGpuLockedClocks` on most hosts (or grant `CAP_SYS_NICE`) |
 
 Everything — launching vLLM, sending the workload, logging power,
@@ -416,6 +435,8 @@ PY
 
 The dataset ships as JSON files; the preprocessing script (§7.2) picks
 the **first human message** of each conversation as the prompt.
+Default trace parameters: 400 requests, TTFT μ=1000ms σ=200ms,
+TPOT μ=50ms σ=40ms, arrival rate 10 req/s.
 
 ---
 
@@ -480,30 +501,30 @@ A Bash script at the project root with:
 
 | Knob                 | Env / var name              | Default |
 |----------------------|-----------------------------|---------|
-| Results tag          | `TAG`                       | `default_run` |
+| Results tag          | `TAG`                       | `demo` |
 | Mode                 | `MODE`                      | `both` (one of `default` / `custom` / `both`) |
 | GPU index            | `GPU_INDEX`                 | `0` |
 | Port                 | `PORT`                      | `8000` |
 | vLLM source dir      | `VLLM_DIR`                  | `/home/ubuntu/lqs/vllm` |
 | Model dir            | `MODEL_DIR`                 | `/home/ubuntu/lqs/LLM_model` |
 | Served model name    | `MODEL_NAME`                | `default` |
-| # requests           | `NUM_REQUESTS`              | `1000` |
-| Arrival rate (req/s) | `RATE_QPS`                  | `8` |
-| TTFT μ (ms)          | `TTFT_MEAN_MS`              | `3000` |
-| TTFT σ (ms)          | `TTFT_STD_MS`               | `500` |
-| TPOT μ (ms)          | `TPOT_MEAN_MS`              | `200` |
+| # requests           | `NUM_REQUESTS`              | `400` |
+| Arrival rate (req/s) | `RATE_QPS`                  | `10` |
+| TTFT μ (ms)          | `TTFT_MEAN_MS`              | `1000` |
+| TTFT σ (ms)          | `TTFT_STD_MS`               | `200` |
+| TPOT μ (ms)          | `TPOT_MEAN_MS`              | `50` |
 | TPOT σ (ms)          | `TPOT_STD_MS`               | `40` |
 | output tokens min    | `MIN_OUT_TOK`               | `64` |
-| output tokens max    | `MAX_OUT_TOK`               | `512` |
+| output tokens max    | `MAX_OUT_TOK`               | `1024` |
 | Seed                 | `TRACE_SEED`                | `42` |
-| β                    | `BETA`                      | `1.0` |
-| `w_TTFT`             | `W_TTFT`                    | `1.0` |
-| `w_TPOT`             | `W_TPOT`                    | `1.0` |
-| η (ms; effectively ∞ ⇒ eq. 6 inactive) | `ETA_MS`  | `1e9` |
+| β                    | `BETA`                      | `0.01` |
+| `w_TTFT`             | `W_TTFT`                    | `2000.0` |
+| `w_TPOT`             | `W_TPOT`                    | `50.0` |
+| η (ms; 200 ⇒ cap worst-case iteration latency) | `ETA_MS` | `200` |
 | `L_max`              | `LMAX`                      | `0` (⇒ inherit vLLM `max_num_batched_tokens`) |
 | freq-candidate stride| `FREQ_STRIDE`               | `4` |
 | `max_model_len`      | `MAX_MODEL_LEN`             | `8192` |
-| `max_num_seqs`       | `MAX_NUM_SEQS`              | `64` |
+| `max_num_seqs`       | `MAX_NUM_SEQS`              | `128` |
 | gpu-mem util         | `GPU_MEM_UTIL`              | `0.90` |
 | power sample period  | `POWER_INTERVAL_S`          | `0.1` |
 
@@ -792,7 +813,7 @@ def adjusted_utility(r, cfg, f_mhz, latency, power) -> Tuple[float, float]:
     """
     t_q = per_request_time_ms(latency, f_mhz, r.is_prefill, r.l_q, r.l_kv)
     f_in = instant_utility(r, cfg)
-    v = f_in - cfg.beta * power.power_watts(f_mhz) * t_q
+    v = f_in - cfg.beta * power.power_watts(f_mhz) * (t_q / 1000.0)  # ms→s
     return v, t_q
 
 def greedy_knapsack_2d(reqs, values, times_ms, tokens,
@@ -820,6 +841,10 @@ class FrequencyFirstSolver:
             if has_decode_any:                      masks.append("decode_only")
             if has_prefill_any and has_decode_any:  masks.append("mixed")
 
+            # Dynamic eta: never drops below most urgent slack
+            min_slack = min(r.deadline_ms - r.wait_ms for r in reqs)
+            effective_eta = max(cfg.eta_ms, min_slack)
+
             for f in freq_candidates[::cfg.freq_stride]:
                 P_f = power.power_watts(f)
                 # per-request values / times depend only on f, not M
@@ -828,34 +853,37 @@ class FrequencyFirstSolver:
                     has_p = M in ("prefill_only", "mixed")
                     has_d = M in ("decode_only",  "mixed")
                     T_ovh = batch_overhead_ms(latency, f, has_p, has_d)
-                    eta_left = cfg.eta_ms - T_ovh - latency.t_c
+                    eta_left = effective_eta - T_ovh - latency.t_c
                     if eta_left <= 0:
                         continue
-                    # restrict candidates to C(M)
-                    idxs = [i for i, r in enumerate(reqs)
-                            if (M != "prefill_only" or r.is_prefill)
-                            and (M != "decode_only"  or not r.is_prefill)]
-                    values  = [v_t[i][0] for i in idxs]
-                    times   = [v_t[i][1] for i in idxs]
-                    tokens  = [reqs[i].l_q   for i in idxs]
+                    # restrict candidates to C(M) with mode filtering
+                    values, times, tokens, idxs = [], [], [], []
+                    for i, r in enumerate(reqs):
+                        if M == "prefill_only" and not r.is_prefill: continue
+                        if M == "decode_only" and r.is_prefill:  continue
+                        v, t = v_t[i]
+                        if v <= 0: continue
+                        values.append(v); times.append(t)
+                        tokens.append(r.l_q); idxs.append(i)
+                    if not values: continue
                     picked_local = greedy_knapsack_2d(
                         idxs, values, times, tokens, Lmax, eta_left)
-                    picked = [idxs[j] for j in picked_local]
+                    picked = [idxs[j] for j in picked_local]  # map back to reqs indices
                     # mask-consistency check for "mixed":
                     # require at least one prefill AND one decode in picked
-                    if M == "mixed":
+                    if M == "mixed" and picked:
                         chosen_reqs = [reqs[i] for i in picked]
                         if not (any(r.is_prefill for r in chosen_reqs)
                                 and any(not r.is_prefill for r in chosen_reqs)):
                             continue
                     sum_v = sum(v_t[i][0] for i in picked)
-                    J = sum_v - cfg.beta * P_f * (T_ovh + latency.t_c)
+                    J = sum_v - cfg.beta * P_f * (T_ovh + latency.t_c) / 1000.0
                     if J > best[0]:
                         et_pred = (sum(v_t[i][1] for i in picked)
                                    + T_ovh + latency.t_c)
                         best = (J, f, picked, et_pred)
 
-            _, f_star, picked, et_pred = best
+            _, f_star, picked, et_pred = best  # safe unpack from fallback
             return f_star, [reqs[i] for i in picked], et_pred
         """
         ...
@@ -1027,10 +1055,10 @@ bash vllm_patches/apply_patch.sh /home/ubuntu/lqs/vllm
 
 # 2. Default-vs-custom run
 bash main.sh --tag demo \
-    --num-requests 500 --rate-qps 8 \
-    --ttft-mean-ms 3000 --tpot-mean-ms 200 \
-    --beta 1.0 --w-ttft 1.0 --w-tpot 1.0 \
-    --freq-stride 4 --mode both
+    --num-requests 400 --rate-qps 10 \
+    --ttft-mean-ms 1000 --tpot-mean-ms 50 \
+    --beta 0.01 --w-ttft 2000 --w-tpot 50 \
+    --freq-stride 4 --eta-ms 200 --max-num-seqs 128 --mode both
 
 # 3. Result
 cat results/demo/comparison.csv

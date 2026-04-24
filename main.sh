@@ -40,45 +40,46 @@ GPU_INDEX=0
 MAX_MODEL_LEN=8192
 # Maximum sequence length (input + output tokens).
 
-MAX_NUM_SEQS=64
+MAX_NUM_SEQS=128
 # Maximum number of concurrent requests in the engine.
 
-GPU_MEM_UTIL=0.90
+GPU_MEM_UTIL=0.9
 # Fraction of GPU memory allocated for KV cache (0.0–1.0).
 
 # ----- Workload settings ------------------------------------------------------
-NUM_REQUESTS=500
+NUM_REQUESTS=400
 # Number of requests to send in this run.
 # Must not exceed the number of lines in trace.jsonl.
 
-RATE_QPS=8
+RATE_QPS=10
 # Request arrival rate (requests per second).
 # Determines how fast the workload is replayed from trace.jsonl.
 
 MIN_OUT_TOK=64
 # Minimum number of output tokens per request.
 
-MAX_OUT_TOK=512
+MAX_OUT_TOK=1024
 # Maximum number of output tokens per request.
 
 TRACE_SEED=42
 # Random seed for trace generation (used by prepare_dataset.py).
 
 # ----- Scheduler hyper-parameters (custom mode only) --------------------------
-BETA=1.0
+BETA=0.1
 # Energy-utility trade-off parameter. Larger β → solver prioritises energy
 # saving over SLO attainment, tends to pick lower GPU frequencies.
-# Typical range: 0.1 (aggressive performance) to 5.0 (aggressive energy saving).
+# The energy term is β × Watts × seconds (Joules).
+# Typical range: 0.001 (mild energy saving) to 1.0 (aggressive energy saving).
 
-W_TTFT=1.0
+W_TTFT=10.0
 # Weight for TTFT in the per-request priority calculation.
 # Higher w_TTFT makes the solver more sensitive to TTFT deadlines.
 
-W_TPOT=1.0
+W_TPOT=10.0
 # Weight for TPOT in the per-request priority calculation.
 # Higher w_TPOT makes the solver more sensitive to TPOT deadlines.
 
-ETA_MS=1e9
+ETA_MS=200
 # Per-iteration time budget η (milliseconds). Default 1e9 is effectively
 # infinite, so the time constraint (eq. 6) is inactive. Lower this to cap
 # worst-case iteration latency (e.g. 500 for a 500ms cap).
@@ -171,8 +172,10 @@ run_experiment() {
         --served-model-name "$MODEL_NAME" \
         --max-model-len "$MAX_MODEL_LEN" \
         --max-num-seqs "$MAX_NUM_SEQS" \
+        --port "$PORT" \
         --gpu-memory-utilization "$GPU_MEM_UTIL" \
         --enforce-eager \
+        --no-async-scheduling \
         --no-enable-chunked-prefill \
         --no-enable-prefix-caching \
         > "${tag_dir}/server_${label}.log" 2>&1 &
@@ -228,7 +231,7 @@ from frequency_controller import FrequencyController
 ctl = FrequencyController($GPU_INDEX)
 ctl.reset()
 print('[main] GPU clocks reset')
-" 2>/dev/null || nvidia-smi -i $GPU_INDEX -rgc 2>/dev/null || true
+" 2>/dev/null || { nvidia-smi -i $GPU_INDEX -rgc 2>/dev/null; nvidia-smi -i $GPU_INDEX -rmc 2>/dev/null; } || true
     fi
 
     # Collect metrics

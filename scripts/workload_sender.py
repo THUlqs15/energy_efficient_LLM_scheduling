@@ -12,6 +12,10 @@ from typing import Optional
 import aiohttp
 
 
+def wall_time() -> float:
+    return time.time()
+
+
 @dataclass
 class ResultRecord:
     id: str
@@ -46,7 +50,7 @@ async def send_one(
             tpot_slo_ms=record["tpot_ms"],
             w_n=record.get("w_n", 1.0),
             arrival_s=record["arrival_s"],
-            send_time=time.monotonic(),
+            send_time=wall_time(),
         )
         payload = {
             "model": model,
@@ -54,12 +58,10 @@ async def send_one(
             "max_tokens": record["max_tokens"],
             "temperature": 0,
             "stream": True,
-            "extra_body": {
-                "extra_args": {
-                    "ttft_ms": record["ttft_ms"],
-                    "tpot_ms": record["tpot_ms"],
-                    "w_n": record.get("w_n", 1.0),
-                }
+            "vllm_xargs": {
+                "ttft_ms": record["ttft_ms"],
+                "tpot_ms": record["tpot_ms"],
+                "w_n": record.get("w_n", 1.0),
             },
         }
         try:
@@ -71,7 +73,7 @@ async def send_one(
                 rr.status = resp.status
                 if resp.status != 200:
                     rr.error = await resp.text()
-                    rr.complete_time = time.monotonic()
+                    rr.complete_time = wall_time()
                     return rr
                 async for line in resp.content:
                     line = line.decode("utf-8").strip()
@@ -87,7 +89,7 @@ async def send_one(
                     choices = chunk.get("choices", [])
                     if choices:
                         text = choices[0].get("text", "")
-                    now = time.monotonic()
+                    now = wall_time()
                     if first_chunk_time is None:
                         first_chunk_time = now
                     if prev_chunk_time is not None:
@@ -95,7 +97,7 @@ async def send_one(
                     prev_chunk_time = now
                     if text:
                         token_count += 1
-            rr.complete_time = time.monotonic()
+            rr.complete_time = wall_time()
             if first_chunk_time is not None:
                 rr.ttft_ms = (first_chunk_time - rr.send_time) * 1000.0
             rr.tpot_ms = (
@@ -104,7 +106,7 @@ async def send_one(
             )
             rr.num_output_tokens = token_count if token_count > 0 else None
         except Exception as e:
-            rr.complete_time = time.monotonic()
+            rr.complete_time = wall_time()
             rr.error = str(e)
         return rr
 

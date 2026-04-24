@@ -1,694 +1,870 @@
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299] 
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299]        █     █     █▄   ▄█
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.0
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299]   █▄█▀ █     █     █     █  model   /home/ubuntu/lqs/LLM_model
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:299] 
-(APIServer pid=9780) INFO 04-20 05:15:36 [utils.py:233] non-default args: {'model': '/home/ubuntu/lqs/LLM_model', 'max_model_len': 8192, 'enforce_eager': True, 'served_model_name': ['default'], 'enable_prefix_caching': False, 'max_num_seqs': 64, 'enable_chunked_prefill': False}
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_SCHEDULER
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_BETA
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_W_TTFT
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_W_TPOT
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_LMAX
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_FREQ_STRIDE
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_ETA_MS
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_GPU_INDEX
-(APIServer pid=9780) WARNING 04-20 05:15:36 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_ITER_LOG
-(APIServer pid=9780) INFO 04-20 05:15:36 [model.py:549] Resolved architecture: Qwen3ForCausalLM
-(APIServer pid=9780) INFO 04-20 05:15:36 [model.py:1678] Using max model len 8192
-(APIServer pid=9780) WARNING 04-20 05:15:36 [arg_utils.py:2125] This model does not officially support disabling chunked prefill. Disabling this manually may cause the engine to crash or produce incorrect outputs.
-(APIServer pid=9780) INFO 04-20 05:15:36 [vllm.py:790] Asynchronous scheduling is enabled.
-(APIServer pid=9780) WARNING 04-20 05:15:36 [vllm.py:848] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
-(APIServer pid=9780) WARNING 04-20 05:15:36 [vllm.py:859] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
-(APIServer pid=9780) INFO 04-20 05:15:36 [vllm.py:1025] Cudagraph is disabled under eager mode
-(APIServer pid=9780) INFO 04-20 05:15:36 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
-(EngineCore pid=9845) INFO 04-20 05:15:43 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='/home/ubuntu/lqs/LLM_model', speculative_config=None, tokenizer='/home/ubuntu/lqs/LLM_model', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=8192, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=default, enable_prefix_caching=False, enable_chunked_prefill=False, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
-(EngineCore pid=9845) INFO 04-20 05:15:43 [parallel_state.py:1400] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.60.93.62:40567 backend=nccl
-[W420 05:16:04.273660061 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
-(EngineCore pid=9845) INFO 04-20 05:16:04 [parallel_state.py:1716] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
-(EngineCore pid=9845) INFO 04-20 05:16:04 [gpu_model_runner.py:4735] Starting to load model /home/ubuntu/lqs/LLM_model...
-(EngineCore pid=9845) INFO 04-20 05:16:05 [cuda.py:334] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
-(EngineCore pid=9845) INFO 04-20 05:16:05 [flash_attn.py:596] Using FlashAttention version 2
-(EngineCore pid=9845) Loading safetensors checkpoint shards:   0% Completed | 0/8 [00:00<?, ?it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  12% Completed | 1/8 [00:00<00:04,  1.64it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  25% Completed | 2/8 [00:01<00:03,  1.50it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  38% Completed | 3/8 [00:01<00:03,  1.49it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  50% Completed | 4/8 [00:02<00:02,  1.54it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  62% Completed | 5/8 [00:03<00:01,  1.57it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  75% Completed | 6/8 [00:03<00:01,  1.58it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards:  88% Completed | 7/8 [00:04<00:00,  1.64it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:04<00:00,  1.90it/s]
-(EngineCore pid=9845) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:04<00:00,  1.68it/s]
-(EngineCore pid=9845) 
-(EngineCore pid=9845) INFO 04-20 05:16:10 [default_loader.py:384] Loading weights took 4.78 seconds
-(EngineCore pid=9845) INFO 04-20 05:16:11 [gpu_model_runner.py:4820] Model loading took 27.52 GiB memory and 5.304171 seconds
-(EngineCore pid=9845) INFO 04-20 05:16:13 [gpu_worker.py:436] Available KV cache memory: 42.63 GiB
-(EngineCore pid=9845) INFO 04-20 05:16:13 [kv_cache_utils.py:1319] GPU KV cache size: 279,376 tokens
-(EngineCore pid=9845) INFO 04-20 05:16:13 [kv_cache_utils.py:1324] Maximum concurrency for 8,192 tokens per request: 34.10x
-(EngineCore pid=9845) INFO 04-20 05:16:13 [core.py:283] init engine (profile, create kv cache, warmup model) took 2.48 seconds
-(EngineCore pid=9845) INFO 04-20 05:16:14 [vllm.py:790] Asynchronous scheduling is enabled.
-(EngineCore pid=9845) WARNING 04-20 05:16:14 [vllm.py:848] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
-(EngineCore pid=9845) WARNING 04-20 05:16:14 [vllm.py:859] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
-(EngineCore pid=9845) INFO 04-20 05:16:14 [vllm.py:1025] Cudagraph is disabled under eager mode
-(EngineCore pid=9845) INFO 04-20 05:16:14 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
-(APIServer pid=9780) INFO 04-20 05:16:14 [api_server.py:590] Supported tasks: ['generate']
-(APIServer pid=9780) WARNING 04-20 05:16:14 [model.py:1435] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'temperature': 0.6, 'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
-(APIServer pid=9780) INFO 04-20 05:16:14 [hf.py:314] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
-(APIServer pid=9780) INFO 04-20 05:16:14 [api_server.py:594] Starting vLLM server on http://0.0.0.0:8000
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:37] Available routes are:
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /docs, Methods: GET, HEAD
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /tokenize, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /detokenize, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /load, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /version, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /health, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /metrics, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/models, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /ping, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /ping, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /invocations, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/chat/completions, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/chat/completions/batch, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/responses, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/responses/{response_id}, Methods: GET
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/responses/{response_id}/cancel, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/completions, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/messages, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/messages/count_tokens, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /inference/v1/generate, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /scale_elastic_ep, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /is_scaling_elastic_ep, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/chat/completions/render, Methods: POST
-(APIServer pid=9780) INFO 04-20 05:16:14 [launcher.py:46] Route: /v1/completions/render, Methods: POST
-(APIServer pid=9780) INFO:     Started server process [9780]
-(APIServer pid=9780) INFO:     Waiting for application startup.
-(APIServer pid=9780) INFO:     Application startup complete.
-(APIServer pid=9780) INFO:     127.0.0.1:42936 - "GET /health HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42938 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42942 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42952 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42958 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=50 f*=1410 |B|=0 solve_ms=0.06 exec_ms=21.44
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42968 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42972 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42976 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42982 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=100 f*=1410 |B|=0 solve_ms=0.09 exec_ms=21.13
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42992 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=150 f*=1410 |B|=0 solve_ms=0.12 exec_ms=22.58
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43010 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43016 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43018 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43020 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43026 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=200 f*=1410 |B|=0 solve_ms=0.17 exec_ms=30.47
-(APIServer pid=9780) INFO:     127.0.0.1:43028 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43030 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43032 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43034 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43040 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43042 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43046 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=250 f*=1410 |B|=0 solve_ms=0.17 exec_ms=32.29
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43054 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43056 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43058 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43060 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43062 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43066 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=300 f*=1410 |B|=49 solve_ms=0.25 exec_ms=26.21
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:16:25 [loggers.py:259] Engine 000: Avg prompt throughput: 883.8 tokens/s, Avg generation throughput: 867.6 tokens/s, Running: 49 reqs, Waiting: 10 reqs, GPU KV cache usage: 6.3%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43068 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43070 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43072 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42968 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43074 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42952 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=350 f*=1410 |B|=44 solve_ms=0.25 exec_ms=26.30
-(APIServer pid=9780) INFO:     127.0.0.1:43076 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43078 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43042 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43018 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=400 f*=1410 |B|=32 solve_ms=0.22 exec_ms=23.23
-(APIServer pid=9780) INFO:     127.0.0.1:42958 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42942 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43016 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=450 f*=1410 |B|=25 solve_ms=0.23 exec_ms=22.86
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43080 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43082 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43084 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42938 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43010 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43086 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=500 f*=1410 |B|=20 solve_ms=0.27 exec_ms=23.73
-(APIServer pid=9780) INFO:     127.0.0.1:42972 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43088 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42992 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43090 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43092 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43096 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43100 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43046 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=550 f*=1410 |B|=15 solve_ms=0.21 exec_ms=22.19
-(APIServer pid=9780) INFO:     127.0.0.1:43102 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42976 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43032 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43104 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43106 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43108 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43110 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=600 f*=1410 |B|=11 solve_ms=0.23 exec_ms=23.95
-(APIServer pid=9780) INFO:     127.0.0.1:43114 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42982 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43116 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43118 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43120 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43122 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43124 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43028 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43030 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=650 f*=1410 |B|=7 solve_ms=0.29 exec_ms=24.73
-(APIServer pid=9780) INFO:     127.0.0.1:43126 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43128 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43026 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43040 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43020 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43034 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43130 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43132 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=700 f*=1410 |B|=2 solve_ms=0.26 exec_ms=21.47
-(APIServer pid=9780) INFO:     127.0.0.1:43134 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43138 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:16:35 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 866.9 tokens/s, Running: 1 reqs, Waiting: 90 reqs, GPU KV cache usage: 0.2%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43140 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43142 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43144 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43146 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43150 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43152 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43154 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43156 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=750 f*=1410 |B|=36 solve_ms=0.37 exec_ms=25.19
-(EngineCore pid=9845) [energy_sched] iter=800 f*=1410 |B|=36 solve_ms=0.30 exec_ms=25.36
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43054 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43056 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=850 f*=1410 |B|=29 solve_ms=0.33 exec_ms=23.06
-(EngineCore pid=9845) [energy_sched] iter=900 f*=1410 |B|=29 solve_ms=0.32 exec_ms=23.72
-(EngineCore pid=9845) [energy_sched] iter=950 f*=1410 |B|=46 solve_ms=0.33 exec_ms=26.08
-(APIServer pid=9780) INFO:     127.0.0.1:43076 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43066 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43058 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1000 f*=1410 |B|=39 solve_ms=0.34 exec_ms=25.97
-(APIServer pid=9780) INFO:     127.0.0.1:43070 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:16:45 [loggers.py:259] Engine 000: Avg prompt throughput: 1471.4 tokens/s, Avg generation throughput: 1084.5 tokens/s, Running: 62 reqs, Waiting: 38 reqs, GPU KV cache usage: 6.9%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43060 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1050 f*=1410 |B|=60 solve_ms=0.33 exec_ms=25.92
-(APIServer pid=9780) INFO:     127.0.0.1:42942 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43018 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43016 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1100 f*=1410 |B|=54 solve_ms=0.35 exec_ms=25.98
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42992 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43062 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1150 f*=1410 |B|=60 solve_ms=0.33 exec_ms=25.67
-(APIServer pid=9780) INFO:     127.0.0.1:42976 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43110 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43074 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42952 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43126 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42958 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42972 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43086 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43134 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1200 f*=1410 |B|=53 solve_ms=0.36 exec_ms=25.62
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43042 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43120 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43026 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42968 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43078 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43068 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43030 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43084 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43104 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43072 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43122 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43010 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1250 f*=1410 |B|=43 solve_ms=0.32 exec_ms=24.82
-(APIServer pid=9780) INFO:     127.0.0.1:43102 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43124 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43156 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43144 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42938 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43146 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1300 f*=1410 |B|=37 solve_ms=0.30 exec_ms=25.35
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43034 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42982 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43082 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43108 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43046 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43080 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43090 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43114 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43092 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43020 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43088 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1350 f*=1410 |B|=27 solve_ms=0.31 exec_ms=22.89
-(APIServer pid=9780) INFO:     127.0.0.1:43118 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43106 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43130 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43116 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1400 f*=1410 |B|=23 solve_ms=0.30 exec_ms=23.37
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:16:55 [loggers.py:259] Engine 000: Avg prompt throughput: 449.2 tokens/s, Avg generation throughput: 1656.1 tokens/s, Running: 22 reqs, Waiting: 78 reqs, GPU KV cache usage: 3.5%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43032 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43028 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43040 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43096 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1450 f*=1410 |B|=15 solve_ms=0.28 exec_ms=21.69
-(APIServer pid=9780) INFO:     127.0.0.1:43150 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43140 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43152 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43132 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43128 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43138 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1500 f*=1410 |B|=19 solve_ms=0.30 exec_ms=22.59
-(APIServer pid=9780) INFO:     127.0.0.1:43054 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43100 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1550 f*=1410 |B|=24 solve_ms=0.28 exec_ms=22.95
-(APIServer pid=9780) INFO:     127.0.0.1:43142 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43154 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43076 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1600 f*=1410 |B|=24 solve_ms=0.29 exec_ms=22.96
-(APIServer pid=9780) INFO:     127.0.0.1:43060 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43056 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43058 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1650 f*=1410 |B|=27 solve_ms=0.30 exec_ms=23.12
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43016 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1700 f*=1410 |B|=36 solve_ms=0.32 exec_ms=22.56
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1750 f*=1410 |B|=48 solve_ms=0.32 exec_ms=25.58
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:17:05 [loggers.py:259] Engine 000: Avg prompt throughput: 1066.0 tokens/s, Avg generation throughput: 997.7 tokens/s, Running: 46 reqs, Waiting: 52 reqs, GPU KV cache usage: 5.0%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43018 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1800 f*=1410 |B|=54 solve_ms=0.35 exec_ms=25.21
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43026 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43068 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43110 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43104 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1850 f*=1410 |B|=57 solve_ms=0.36 exec_ms=31.88
-(APIServer pid=9780) INFO:     127.0.0.1:43070 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42968 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43134 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43126 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43010 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42952 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1900 f*=1410 |B|=49 solve_ms=0.34 exec_ms=25.34
-(APIServer pid=9780) INFO:     127.0.0.1:43062 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43120 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43066 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43118 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=1950 f*=1410 |B|=54 solve_ms=0.33 exec_ms=23.72
-(APIServer pid=9780) INFO:     127.0.0.1:43074 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42972 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43108 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2000 f*=1410 |B|=55 solve_ms=0.33 exec_ms=25.66
-(APIServer pid=9780) INFO:     127.0.0.1:43046 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42942 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43088 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43080 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43106 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2050 f*=1410 |B|=51 solve_ms=0.33 exec_ms=23.41
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43144 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42992 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43124 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43100 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43152 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43040 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43042 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43114 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43086 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42976 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43020 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43140 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2100 f*=1410 |B|=38 solve_ms=0.31 exec_ms=25.43
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42958 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:17:15 [loggers.py:259] Engine 000: Avg prompt throughput: 658.3 tokens/s, Avg generation throughput: 1768.7 tokens/s, Running: 43 reqs, Waiting: 57 reqs, GPU KV cache usage: 5.5%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43078 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43082 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43150 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43142 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2150 f*=1410 |B|=38 solve_ms=0.31 exec_ms=24.99
-(APIServer pid=9780) INFO:     127.0.0.1:43084 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43146 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43132 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43090 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42982 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43156 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43128 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43032 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43054 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42938 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2200 f*=1410 |B|=34 solve_ms=0.31 exec_ms=25.29
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43102 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43030 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43072 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43122 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43138 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43034 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2250 f*=1410 |B|=26 solve_ms=0.31 exec_ms=22.07
-(APIServer pid=9780) INFO:     127.0.0.1:43092 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43028 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43116 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43130 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2300 f*=1410 |B|=33 solve_ms=0.31 exec_ms=24.46
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43070 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43096 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2350 f*=1410 |B|=33 solve_ms=0.31 exec_ms=24.74
-(APIServer pid=9780) INFO:     127.0.0.1:43060 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2400 f*=1410 |B|=36 solve_ms=0.31 exec_ms=24.59
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43134 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2450 f*=1410 |B|=31 solve_ms=0.30 exec_ms=23.23
-(APIServer pid=9780) INFO:     127.0.0.1:43118 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43154 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:17:25 [loggers.py:259] Engine 000: Avg prompt throughput: 539.1 tokens/s, Avg generation throughput: 1257.6 tokens/s, Running: 37 reqs, Waiting: 63 reqs, GPU KV cache usage: 4.4%, Prefix cache hit rate: 0.0%
-(EngineCore pid=9845) [energy_sched] iter=2500 f*=1410 |B|=43 solve_ms=0.34 exec_ms=24.91
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43076 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42942 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2550 f*=1410 |B|=35 solve_ms=0.31 exec_ms=24.68
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42972 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43016 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43056 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2600 f*=1410 |B|=39 solve_ms=0.34 exec_ms=25.50
-(APIServer pid=9780) INFO:     127.0.0.1:43058 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43104 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43010 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43100 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42952 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43124 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2650 f*=1410 |B|=46 solve_ms=0.34 exec_ms=25.73
-(APIServer pid=9780) INFO:     127.0.0.1:43018 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43110 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42944 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42964 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43108 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43080 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2700 f*=1410 |B|=47 solve_ms=0.32 exec_ms=25.80
-(APIServer pid=9780) INFO:     127.0.0.1:43106 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43114 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43126 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43090 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42968 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43068 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43122 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43062 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2750 f*=1410 |B|=46 solve_ms=0.34 exec_ms=25.77
-(APIServer pid=9780) INFO:     127.0.0.1:43026 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43072 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42958 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43074 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43040 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43052 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42992 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43144 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2800 f*=1410 |B|=44 solve_ms=0.34 exec_ms=25.62
-(APIServer pid=9780) INFO:     127.0.0.1:43156 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43084 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43034 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43014 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43012 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43120 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO 04-20 05:17:35 [loggers.py:259] Engine 000: Avg prompt throughput: 1192.1 tokens/s, Avg generation throughput: 1385.4 tokens/s, Running: 38 reqs, Waiting: 62 reqs, GPU KV cache usage: 5.3%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43066 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2850 f*=1410 |B|=44 solve_ms=0.35 exec_ms=26.15
-(APIServer pid=9780) INFO:     127.0.0.1:42960 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42938 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43140 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42940 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42976 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43060 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43054 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43132 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2900 f*=1410 |B|=38 solve_ms=0.31 exec_ms=25.46
-(APIServer pid=9780) INFO:     127.0.0.1:43022 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43030 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=2950 f*=1410 |B|=42 solve_ms=0.33 exec_ms=26.43
-(APIServer pid=9780) INFO:     127.0.0.1:43004 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43146 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43088 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43128 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43046 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42950 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43138 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3000 f*=1410 |B|=45 solve_ms=0.34 exec_ms=26.11
-(APIServer pid=9780) INFO:     127.0.0.1:43150 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43078 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43086 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43020 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3050 f*=1410 |B|=41 solve_ms=0.32 exec_ms=25.65
-(APIServer pid=9780) INFO:     127.0.0.1:43036 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43142 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43096 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43152 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43082 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43092 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43042 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43070 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43048 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3100 f*=1410 |B|=39 solve_ms=0.32 exec_ms=25.49
-(APIServer pid=9780) INFO:     127.0.0.1:43044 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42984 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42982 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43118 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42990 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43032 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43102 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43104 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43154 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42996 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42988 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43008 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3150 f*=1410 |B|=27 solve_ms=0.31 exec_ms=24.03
-(APIServer pid=9780) INFO 04-20 05:17:45 [loggers.py:259] Engine 000: Avg prompt throughput: 317.6 tokens/s, Avg generation throughput: 1357.2 tokens/s, Running: 42 reqs, Waiting: 58 reqs, GPU KV cache usage: 5.5%, Prefix cache hit rate: 0.0%
-(APIServer pid=9780) INFO:     127.0.0.1:43130 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43006 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42948 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42980 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43028 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42978 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42994 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3200 f*=1410 |B|=42 solve_ms=0.32 exec_ms=25.42
-(APIServer pid=9780) INFO:     127.0.0.1:42962 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42966 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43000 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43116 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3250 f*=1410 |B|=38 solve_ms=0.32 exec_ms=25.43
-(APIServer pid=9780) INFO:     127.0.0.1:43080 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43090 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43038 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42954 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3300 f*=1410 |B|=45 solve_ms=0.32 exec_ms=25.68
-(APIServer pid=9780) INFO:     127.0.0.1:43134 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42986 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43050 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43024 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43076 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42970 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:43106 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3350 f*=1410 |B|=44 solve_ms=0.33 exec_ms=25.43
-(APIServer pid=9780) INFO:     127.0.0.1:43062 - "POST /v1/completions HTTP/1.1" 200 OK
-(APIServer pid=9780) INFO:     127.0.0.1:42998 - "POST /v1/completions HTTP/1.1" 200 OK
-(EngineCore pid=9845) [energy_sched] iter=3400 f*=1410 |B|=47 solve_ms=0.32 exec_ms=25.70
-(EngineCore pid=9845) [energy_sched] iter=3450 f*=1410 |B|=40 solve_ms=0.31 exec_ms=25.44
-(EngineCore pid=9845) [energy_sched] iter=3500 f*=1410 |B|=29 solve_ms=0.27 exec_ms=23.48
-(APIServer pid=9780) INFO 04-20 05:17:55 [loggers.py:259] Engine 000: Avg prompt throughput: 885.4 tokens/s, Avg generation throughput: 1460.3 tokens/s, Running: 41 reqs, Waiting: 31 reqs, GPU KV cache usage: 4.7%, Prefix cache hit rate: 0.0%
-(EngineCore pid=9845) [energy_sched] iter=3550 f*=1410 |B|=43 solve_ms=0.26 exec_ms=25.44
-(EngineCore pid=9845) [energy_sched] iter=3600 f*=1410 |B|=33 solve_ms=0.25 exec_ms=24.98
-(EngineCore pid=9845) [energy_sched] iter=3650 f*=1410 |B|=33 solve_ms=0.21 exec_ms=24.77
-(EngineCore pid=9845) [energy_sched] iter=3700 f*=1410 |B|=36 solve_ms=0.22 exec_ms=25.11
-(EngineCore pid=9845) [energy_sched] iter=3750 f*=1410 |B|=37 solve_ms=0.23 exec_ms=25.27
-(EngineCore pid=9845) [energy_sched] iter=3800 f*=1410 |B|=28 solve_ms=0.22 exec_ms=24.26
-(EngineCore pid=9845) [energy_sched] iter=3850 f*=1410 |B|=25 solve_ms=0.12 exec_ms=23.40
-(APIServer pid=9780) INFO 04-20 05:18:05 [loggers.py:259] Engine 000: Avg prompt throughput: 833.7 tokens/s, Avg generation throughput: 1222.5 tokens/s, Running: 23 reqs, Waiting: 0 reqs, GPU KV cache usage: 3.3%, Prefix cache hit rate: 0.0%
-(EngineCore pid=9845) [energy_sched] iter=3900 f*=1410 |B|=23 solve_ms=0.10 exec_ms=23.26
-(EngineCore pid=9845) [energy_sched] iter=3950 f*=1410 |B|=18 solve_ms=0.10 exec_ms=22.71
-(EngineCore pid=9845) [energy_sched] iter=4000 f*=1410 |B|=14 solve_ms=0.06 exec_ms=21.23
-(EngineCore pid=9845) [energy_sched] iter=4050 f*=1410 |B|=10 solve_ms=0.07 exec_ms=21.99
-(EngineCore pid=9845) [energy_sched] iter=4100 f*=1410 |B|=6 solve_ms=0.07 exec_ms=23.62
-(EngineCore pid=9845) [energy_sched] iter=4150 f*=1410 |B|=4 solve_ms=0.04 exec_ms=21.44
-(EngineCore pid=9845) [energy_sched] iter=4200 f*=1410 |B|=4 solve_ms=0.05 exec_ms=24.96
-(EngineCore pid=9845) [energy_sched] iter=4250 f*=1410 |B|=1 solve_ms=0.04 exec_ms=21.34
-(EngineCore pid=9845) [energy_sched] iter=4300 f*=1410 |B|=1 solve_ms=0.03 exec_ms=21.30
-(APIServer pid=9780) INFO 04-20 05:18:15 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 381.1 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.2%, Prefix cache hit rate: 0.0%
-(EngineCore pid=9845) INFO 04-20 05:18:15 [core.py:1210] Shutdown initiated (timeout=0)
-(EngineCore pid=9845) INFO 04-20 05:18:15 [core.py:1233] Shutdown complete
-(APIServer pid=9780) INFO:     Shutting down
-[rank0]:[W420 05:18:15.150224901 ProcessGroupNCCL.cpp:1553] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
-(APIServer pid=9780) INFO:     Waiting for application shutdown.
-(APIServer pid=9780) INFO:     Application shutdown complete.
-(APIServer pid=9780) INFO:     Finished server process [9780]
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299] 
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299]        █     █     █▄   ▄█
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.0
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299]   █▄█▀ █     █     █     █  model   /home/ubuntu/lqs/LLM_model
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:299] 
+(APIServer pid=43995) INFO 04-24 15:41:17 [utils.py:233] non-default args: {'model': '/home/ubuntu/lqs/LLM_model', 'max_model_len': 8192, 'enforce_eager': True, 'served_model_name': ['default'], 'enable_prefix_caching': False, 'max_num_seqs': 128, 'enable_chunked_prefill': False, 'async_scheduling': False}
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_SCHEDULER
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_BETA
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_W_TTFT
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_W_TPOT
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_LMAX
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_FREQ_STRIDE
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_ETA_MS
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_GPU_INDEX
+(APIServer pid=43995) WARNING 04-24 15:41:17 [envs.py:1744] Unknown vLLM environment variable detected: VLLM_ENERGY_ITER_LOG
+(APIServer pid=43995) INFO 04-24 15:41:17 [model.py:549] Resolved architecture: Qwen3ForCausalLM
+(APIServer pid=43995) INFO 04-24 15:41:17 [model.py:1678] Using max model len 8192
+(APIServer pid=43995) WARNING 04-24 15:41:17 [arg_utils.py:2125] This model does not officially support disabling chunked prefill. Disabling this manually may cause the engine to crash or produce incorrect outputs.
+(APIServer pid=43995) INFO 04-24 15:41:17 [vllm.py:790] Asynchronous scheduling is disabled.
+(APIServer pid=43995) WARNING 04-24 15:41:17 [vllm.py:848] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=43995) WARNING 04-24 15:41:17 [vllm.py:859] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=43995) INFO 04-24 15:41:17 [vllm.py:1025] Cudagraph is disabled under eager mode
+(APIServer pid=43995) INFO 04-24 15:41:17 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+(EngineCore pid=44060) INFO 04-24 15:41:25 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='/home/ubuntu/lqs/LLM_model', speculative_config=None, tokenizer='/home/ubuntu/lqs/LLM_model', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=8192, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=default, enable_prefix_caching=False, enable_chunked_prefill=False, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore pid=44060) INFO 04-24 15:41:25 [parallel_state.py:1400] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.60.93.62:48405 backend=nccl
+(EngineCore pid=44060) INFO 04-24 15:41:25 [parallel_state.py:1716] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=44060) INFO 04-24 15:41:26 [gpu_model_runner.py:4735] Starting to load model /home/ubuntu/lqs/LLM_model...
+(EngineCore pid=44060) INFO 04-24 15:41:26 [cuda.py:334] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore pid=44060) INFO 04-24 15:41:26 [flash_attn.py:596] Using FlashAttention version 2
+(EngineCore pid=44060) Loading safetensors checkpoint shards:   0% Completed | 0/8 [00:00<?, ?it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  12% Completed | 1/8 [00:00<00:04,  1.64it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  25% Completed | 2/8 [00:01<00:03,  1.61it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  38% Completed | 3/8 [00:01<00:03,  1.60it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  50% Completed | 4/8 [00:02<00:02,  1.60it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  62% Completed | 5/8 [00:03<00:01,  1.60it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  75% Completed | 6/8 [00:03<00:01,  1.60it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards:  88% Completed | 7/8 [00:04<00:00,  1.60it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:04<00:00,  1.90it/s]
+(EngineCore pid=44060) Loading safetensors checkpoint shards: 100% Completed | 8/8 [00:04<00:00,  1.71it/s]
+(EngineCore pid=44060) 
+(EngineCore pid=44060) INFO 04-24 15:41:31 [default_loader.py:384] Loading weights took 4.71 seconds
+(EngineCore pid=44060) INFO 04-24 15:41:32 [gpu_model_runner.py:4820] Model loading took 27.52 GiB memory and 5.217792 seconds
+(EngineCore pid=44060) INFO 04-24 15:41:34 [gpu_worker.py:436] Available KV cache memory: 42.63 GiB
+(EngineCore pid=44060) INFO 04-24 15:41:34 [kv_cache_utils.py:1319] GPU KV cache size: 279,376 tokens
+(EngineCore pid=44060) INFO 04-24 15:41:34 [kv_cache_utils.py:1324] Maximum concurrency for 8,192 tokens per request: 34.10x
+(EngineCore pid=44060) INFO 04-24 15:41:34 [core.py:283] init engine (profile, create kv cache, warmup model) took 2.45 seconds
+(EngineCore pid=44060) INFO 04-24 15:41:35 [vllm.py:790] Asynchronous scheduling is disabled.
+(EngineCore pid=44060) WARNING 04-24 15:41:35 [vllm.py:848] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(EngineCore pid=44060) WARNING 04-24 15:41:35 [vllm.py:859] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(EngineCore pid=44060) INFO 04-24 15:41:35 [vllm.py:1025] Cudagraph is disabled under eager mode
+(EngineCore pid=44060) INFO 04-24 15:41:35 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+(APIServer pid=43995) INFO 04-24 15:41:35 [api_server.py:590] Supported tasks: ['generate']
+(APIServer pid=43995) WARNING 04-24 15:41:35 [model.py:1435] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'temperature': 0.6, 'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
+(APIServer pid=43995) INFO 04-24 15:41:36 [hf.py:314] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=43995) INFO 04-24 15:41:36 [api_server.py:594] Starting vLLM server on http://0.0.0.0:8000
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:37] Available routes are:
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /docs, Methods: GET, HEAD
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /tokenize, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /detokenize, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /load, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /version, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /health, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/models, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /ping, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /ping, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /invocations, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/chat/completions/batch, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/responses, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/completions, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/messages, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=43995) INFO 04-24 15:41:36 [launcher.py:46] Route: /v1/completions/render, Methods: POST
+(APIServer pid=43995) INFO:     Started server process [43995]
+(APIServer pid=43995) INFO:     Waiting for application startup.
+(APIServer pid=43995) INFO:     Application startup complete.
+(APIServer pid=43995) INFO:     127.0.0.1:38804 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38806 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=0 all=1(p=1d=0) picked=1(p=1d=0) f=990 eff_eta=200 min_sl=892
+(APIServer pid=43995) INFO:     127.0.0.1:38808 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38812 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38814 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38816 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38820 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38822 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=10 all=8(p=0d=8) picked=8(p=0d=8) f=930 eff_eta=200 min_sl=-30
+(APIServer pid=43995) INFO:     127.0.0.1:38826 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38828 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38830 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38832 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38834 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38836 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38838 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38840 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=20 all=16(p=1d=15) picked=16(p=1d=15) f=1050 eff_eta=200 min_sl=-63
+(APIServer pid=43995) INFO:     127.0.0.1:38842 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38844 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38846 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38850 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38852 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38856 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=30 all=24(p=1d=23) picked=24(p=1d=23) f=990 eff_eta=200 min_sl=-63
+(APIServer pid=43995) INFO:     127.0.0.1:38858 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38860 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38862 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38864 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38866 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38868 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38870 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=40 all=31(p=1d=30) picked=31(p=1d=30) f=1050 eff_eta=200 min_sl=-29
+(APIServer pid=43995) INFO:     127.0.0.1:38874 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38876 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38878 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38880 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38882 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38884 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38886 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38888 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=50 f*=990 |B|=38 solve_ms=3.03 exec_ms=35.56
+(APIServer pid=43995) INFO:     127.0.0.1:38890 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=50 all=40(p=2d=38) picked=39(p=1d=38) f=990 eff_eta=200 min_sl=-28
+(APIServer pid=43995) INFO:     127.0.0.1:38892 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38896 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38900 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38904 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38906 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38908 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38910 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38912 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38914 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=60 all=50(p=2d=48) picked=49(p=1d=48) f=990 eff_eta=200 min_sl=-987
+(APIServer pid=43995) INFO:     127.0.0.1:38918 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38920 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38924 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38926 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38928 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38930 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=70 all=57(p=2d=55) picked=56(p=1d=55) f=990 eff_eta=200 min_sl=-1686
+(APIServer pid=43995) INFO:     127.0.0.1:38932 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38934 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38938 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38940 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38942 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38944 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38946 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38948 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=80 all=66(p=3d=63) picked=64(p=1d=63) f=1050 eff_eta=200 min_sl=-2585
+(APIServer pid=43995) INFO:     127.0.0.1:38950 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38956 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38958 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38960 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38962 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38964 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38968 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38970 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38972 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38974 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=90 all=78(p=2d=76) picked=76(p=0d=76) f=990 eff_eta=200 min_sl=-3784
+(APIServer pid=43995) INFO:     127.0.0.1:38976 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38978 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38980 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38982 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38984 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=100 f*=990 |B|=81 solve_ms=7.27 exec_ms=45.29
+(APIServer pid=43995) INFO:     127.0.0.1:38986 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=100 all=84(p=3d=81) picked=82(p=1d=81) f=990 eff_eta=200 min_sl=-4329
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38988 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38990 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38992 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38996 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38998 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=110 all=89(p=3d=86) picked=87(p=1d=86) f=990 eff_eta=200 min_sl=-4931
+(APIServer pid=43995) INFO:     127.0.0.1:39000 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39002 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39004 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39006 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39008 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39010 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39012 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39014 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=120 all=97(p=3d=94) picked=95(p=1d=94) f=990 eff_eta=200 min_sl=-5734
+(APIServer pid=43995) INFO 04-24 15:41:46 [loggers.py:259] Engine 000: Avg prompt throughput: 1293.6 tokens/s, Avg generation throughput: 535.6 tokens/s, Running: 95 reqs, Waiting: 2 reqs, GPU KV cache usage: 7.3%, Prefix cache hit rate: 0.0%
+(APIServer pid=43995) INFO:     127.0.0.1:39016 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39018 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39020 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=130 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-6543
+(EngineCore pid=44060) [dbg] iter=140 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-7020
+(APIServer pid=43995) INFO:     127.0.0.1:38924 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=150 f*=990 |B|=98 solve_ms=13.80 exec_ms=43.88
+(EngineCore pid=44060) [dbg] iter=150 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-7556
+(APIServer pid=43995) INFO:     127.0.0.1:38948 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=160 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-8044
+(EngineCore pid=44060) [dbg] iter=170 all=99(p=2d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-8522
+(APIServer pid=43995) INFO:     127.0.0.1:38856 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=180 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-9033
+(APIServer pid=43995) INFO:     127.0.0.1:38940 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=190 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-9553
+(EngineCore pid=44060) [energy_sched] iter=200 f*=990 |B|=98 solve_ms=7.29 exec_ms=39.35
+(EngineCore pid=44060) [dbg] iter=200 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-10064
+(APIServer pid=43995) INFO:     127.0.0.1:39020 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=210 all=100(p=3d=97) picked=98(p=1d=97) f=990 eff_eta=200 min_sl=-10545
+(EngineCore pid=44060) [dbg] iter=220 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-11044
+(APIServer pid=43995) INFO:     127.0.0.1:38998 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38826 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=230 all=100(p=3d=97) picked=98(p=1d=97) f=990 eff_eta=200 min_sl=-11564
+(APIServer pid=43995) INFO:     127.0.0.1:38970 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38926 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=240 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-12130
+(APIServer pid=43995) INFO:     127.0.0.1:39016 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38888 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=250 f*=990 |B|=98 solve_ms=7.74 exec_ms=39.68
+(EngineCore pid=44060) [dbg] iter=250 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-12652
+(EngineCore pid=44060) [dbg] iter=260 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-13150
+(EngineCore pid=44060) [dbg] iter=270 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-13652
+(EngineCore pid=44060) [dbg] iter=280 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-14138
+(APIServer pid=43995) INFO:     127.0.0.1:38918 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=290 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-14652
+(EngineCore pid=44060) [energy_sched] iter=300 f*=990 |B|=98 solve_ms=7.72 exec_ms=40.13
+(EngineCore pid=44060) [dbg] iter=300 all=99(p=2d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-15140
+(APIServer pid=43995) INFO:     127.0.0.1:38890 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=310 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-15676
+(APIServer pid=43995) INFO:     127.0.0.1:38842 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:41:56 [loggers.py:259] Engine 000: Avg prompt throughput: 195.7 tokens/s, Avg generation throughput: 1869.2 tokens/s, Running: 97 reqs, Waiting: 2 reqs, GPU KV cache usage: 12.7%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=320 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-16365
+(APIServer pid=43995) INFO:     127.0.0.1:38868 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=330 all=100(p=3d=97) picked=98(p=1d=97) f=990 eff_eta=200 min_sl=-16857
+(APIServer pid=43995) INFO:     127.0.0.1:38828 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=340 all=100(p=2d=98) picked=98(p=0d=98) f=990 eff_eta=200 min_sl=-17392
+(APIServer pid=43995) INFO:     127.0.0.1:38914 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=350 f*=990 |B|=97 solve_ms=7.35 exec_ms=40.64
+(APIServer pid=43995) INFO:     127.0.0.1:38910 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=350 all=100(p=3d=97) picked=98(p=1d=97) f=990 eff_eta=200 min_sl=-17911
+(APIServer pid=43995) INFO:     127.0.0.1:38858 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38822 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38906 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=360 all=100(p=4d=96) picked=97(p=1d=96) f=1050 eff_eta=200 min_sl=-18618
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38846 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=370 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-19466
+(APIServer pid=43995) INFO:     127.0.0.1:38834 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38934 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=380 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-20010
+(EngineCore pid=44060) [dbg] iter=390 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-20514
+(EngineCore pid=44060) [energy_sched] iter=400 f*=990 |B|=97 solve_ms=7.47 exec_ms=41.52
+(EngineCore pid=44060) [dbg] iter=400 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-21019
+(APIServer pid=43995) INFO:     127.0.0.1:38884 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38882 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=410 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-21557
+(APIServer pid=43995) INFO:     127.0.0.1:39008 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38836 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=420 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-22125
+(EngineCore pid=44060) [dbg] iter=430 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-22637
+(APIServer pid=43995) INFO:     127.0.0.1:38970 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=440 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-23175
+(EngineCore pid=44060) [energy_sched] iter=450 f*=990 |B|=96 solve_ms=7.52 exec_ms=41.95
+(APIServer pid=43995) INFO:     127.0.0.1:39010 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=450 all=99(p=4d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-23685
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38978 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38896 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=460 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-24288
+(APIServer pid=43995) INFO:     127.0.0.1:38820 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=470 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-24814
+(APIServer pid=43995) INFO:     127.0.0.1:38998 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=480 all=100(p=4d=96) picked=97(p=1d=96) f=990 eff_eta=200 min_sl=-25319
+(APIServer pid=43995) INFO 04-24 15:42:06 [loggers.py:259] Engine 000: Avg prompt throughput: 245.8 tokens/s, Avg generation throughput: 1718.6 tokens/s, Running: 97 reqs, Waiting: 3 reqs, GPU KV cache usage: 16.4%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=490 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-25843
+(APIServer pid=43995) INFO:     127.0.0.1:38954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=500 f*=990 |B|=97 solve_ms=7.49 exec_ms=42.00
+(EngineCore pid=44060) [dbg] iter=500 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-26398
+(APIServer pid=43995) INFO:     127.0.0.1:38984 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=510 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-27153
+(APIServer pid=43995) INFO:     127.0.0.1:38924 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38856 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38840 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=520 all=100(p=4d=96) picked=97(p=1d=96) f=990 eff_eta=200 min_sl=-27745
+(APIServer pid=43995) INFO:     127.0.0.1:38860 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=530 all=100(p=4d=96) picked=97(p=1d=96) f=1050 eff_eta=200 min_sl=-28318
+(APIServer pid=43995) INFO:     127.0.0.1:38828 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=540 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-29093
+(APIServer pid=43995) INFO:     127.0.0.1:38838 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38844 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=550 f*=990 |B|=97 solve_ms=7.66 exec_ms=41.47
+(EngineCore pid=44060) [dbg] iter=550 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-29652
+(EngineCore pid=44060) [dbg] iter=560 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-30156
+(APIServer pid=43995) INFO:     127.0.0.1:38960 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39020 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38986 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38964 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=570 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-30804
+(EngineCore pid=44060) [dbg] iter=580 all=99(p=3d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-31305
+(APIServer pid=43995) INFO:     127.0.0.1:38962 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38940 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=590 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-31999
+(APIServer pid=43995) INFO:     127.0.0.1:38882 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38988 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=600 f*=990 |B|=97 solve_ms=7.69 exec_ms=41.65
+(EngineCore pid=44060) [dbg] iter=600 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-32556
+(APIServer pid=43995) INFO:     127.0.0.1:38912 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38826 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=610 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-33123
+(APIServer pid=43995) INFO:     127.0.0.1:38996 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=620 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-33660
+(APIServer pid=43995) INFO:     127.0.0.1:38892 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38944 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=630 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-34393
+(APIServer pid=43995) INFO:     127.0.0.1:38880 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=640 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-34981
+(EngineCore pid=44060) [energy_sched] iter=650 f*=990 |B|=97 solve_ms=7.69 exec_ms=41.13
+(EngineCore pid=44060) [dbg] iter=650 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-35492
+(APIServer pid=43995) INFO:     127.0.0.1:38832 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38878 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:42:16 [loggers.py:259] Engine 000: Avg prompt throughput: 466.3 tokens/s, Avg generation throughput: 1607.4 tokens/s, Running: 95 reqs, Waiting: 3 reqs, GPU KV cache usage: 17.2%, Prefix cache hit rate: 0.0%
+(APIServer pid=43995) INFO:     127.0.0.1:38890 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=660 all=100(p=3d=97) picked=97(p=0d=97) f=990 eff_eta=200 min_sl=-36072
+(APIServer pid=43995) INFO:     127.0.0.1:38852 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=670 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-36594
+(APIServer pid=43995) INFO:     127.0.0.1:38900 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=680 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-37124
+(APIServer pid=43995) INFO:     127.0.0.1:38874 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38956 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38920 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=690 all=100(p=5d=95) picked=96(p=1d=95) f=1050 eff_eta=200 min_sl=-37828
+(EngineCore pid=44060) [energy_sched] iter=700 f*=990 |B|=96 solve_ms=7.63 exec_ms=41.09
+(EngineCore pid=44060) [dbg] iter=700 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-38497
+(APIServer pid=43995) INFO:     127.0.0.1:39002 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=710 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-39188
+(APIServer pid=43995) INFO:     127.0.0.1:38848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38850 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=720 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-39726
+(APIServer pid=43995) INFO:     127.0.0.1:38918 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=730 all=100(p=5d=95) picked=96(p=1d=95) f=1050 eff_eta=200 min_sl=-40230
+(APIServer pid=43995) INFO:     127.0.0.1:39010 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39010 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38814 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38858 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=740 all=99(p=5d=94) picked=95(p=1d=94) f=990 eff_eta=200 min_sl=-41057
+(APIServer pid=43995) INFO:     127.0.0.1:38938 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38834 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38960 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39004 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=750 f*=990 |B|=96 solve_ms=8.11 exec_ms=41.83
+(EngineCore pid=44060) [dbg] iter=750 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-41887
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38988 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=760 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-42427
+(APIServer pid=43995) INFO:     127.0.0.1:38808 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38888 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39016 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=770 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-43020
+(APIServer pid=43995) INFO:     127.0.0.1:38932 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38996 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=780 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-43573
+(APIServer pid=43995) INFO:     127.0.0.1:38920 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=790 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-44105
+(APIServer pid=43995) INFO:     127.0.0.1:38862 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38946 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38982 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=800 f*=990 |B|=96 solve_ms=7.59 exec_ms=41.21
+(EngineCore pid=44060) [dbg] iter=800 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-44805
+(EngineCore pid=44060) [dbg] iter=810 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-45308
+(APIServer pid=43995) INFO:     127.0.0.1:38992 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39014 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:42:26 [loggers.py:259] Engine 000: Avg prompt throughput: 454.4 tokens/s, Avg generation throughput: 1571.2 tokens/s, Running: 96 reqs, Waiting: 4 reqs, GPU KV cache usage: 17.5%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=820 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-45846
+(APIServer pid=43995) INFO:     127.0.0.1:38978 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=830 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-46380
+(APIServer pid=43995) INFO:     127.0.0.1:38950 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39006 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38870 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=840 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-47132
+(EngineCore pid=44060) [energy_sched] iter=850 f*=990 |B|=96 solve_ms=7.55 exec_ms=41.31
+(EngineCore pid=44060) [dbg] iter=850 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-47634
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38896 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=860 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-48204
+(APIServer pid=43995) INFO:     127.0.0.1:38974 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=870 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-48971
+(APIServer pid=43995) INFO:     127.0.0.1:38976 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38842 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=880 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-49514
+(EngineCore pid=44060) [dbg] iter=890 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-50020
+(APIServer pid=43995) INFO:     127.0.0.1:38910 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38904 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38806 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=900 f*=990 |B|=96 solve_ms=7.73 exec_ms=151.14
+(EngineCore pid=44060) [dbg] iter=900 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-50802
+(APIServer pid=43995) INFO:     127.0.0.1:38908 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38918 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38816 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=910 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-51403
+(APIServer pid=43995) INFO:     127.0.0.1:38984 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38836 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=920 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-51947
+(APIServer pid=43995) INFO:     127.0.0.1:38884 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38948 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=930 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-52756
+(EngineCore pid=44060) [dbg] iter=940 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-53267
+(APIServer pid=43995) INFO:     127.0.0.1:39012 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39018 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=950 f*=990 |B|=96 solve_ms=7.66 exec_ms=72.27
+(EngineCore pid=44060) [dbg] iter=950 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-53864
+(APIServer pid=43995) INFO:     127.0.0.1:38864 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38926 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=960 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-54572
+(EngineCore pid=44060) [dbg] iter=970 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-55077
+(APIServer pid=43995) INFO:     127.0.0.1:38834 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39008 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38972 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38812 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=980 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-55684
+(APIServer pid=43995) INFO:     127.0.0.1:38934 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:42:36 [loggers.py:259] Engine 000: Avg prompt throughput: 506.7 tokens/s, Avg generation throughput: 1561.6 tokens/s, Running: 95 reqs, Waiting: 4 reqs, GPU KV cache usage: 16.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=43995) INFO:     127.0.0.1:38830 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=990 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-56426
+(APIServer pid=43995) INFO:     127.0.0.1:38882 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38924 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1000 f*=990 |B|=96 solve_ms=7.53 exec_ms=41.96
+(EngineCore pid=44060) [dbg] iter=1000 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-57132
+(APIServer pid=43995) INFO:     127.0.0.1:38930 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38874 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38958 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1010 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-57720
+(APIServer pid=43995) INFO:     127.0.0.1:38886 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1020 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-58224
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39016 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38866 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1030 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-58826
+(APIServer pid=43995) INFO:     127.0.0.1:38968 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38848 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1040 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-59388
+(APIServer pid=43995) INFO:     127.0.0.1:38906 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38808 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1050 f*=1050 |B|=96 solve_ms=7.92 exec_ms=40.85
+(EngineCore pid=44060) [dbg] iter=1050 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-60042
+(APIServer pid=43995) INFO:     127.0.0.1:38840 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38828 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1060 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-60632
+(APIServer pid=43995) INFO:     127.0.0.1:38990 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38846 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38868 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38832 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1070 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-61190
+(APIServer pid=43995) INFO:     127.0.0.1:38928 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39002 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38980 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1080 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-62072
+(EngineCore pid=44060) [dbg] iter=1090 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-62562
+(APIServer pid=43995) INFO:     127.0.0.1:38826 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38970 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1100 f*=990 |B|=96 solve_ms=7.73 exec_ms=40.98
+(EngineCore pid=44060) [dbg] iter=1100 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-63274
+(APIServer pid=43995) INFO:     127.0.0.1:38944 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1110 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-63771
+(APIServer pid=43995) INFO:     127.0.0.1:38964 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1120 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-64292
+(APIServer pid=43995) INFO:     127.0.0.1:38986 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1130 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-64810
+(APIServer pid=43995) INFO:     127.0.0.1:39000 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1140 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-65314
+(APIServer pid=43995) INFO:     127.0.0.1:38990 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38856 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38846 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38844 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:42:46 [loggers.py:259] Engine 000: Avg prompt throughput: 422.8 tokens/s, Avg generation throughput: 1589.9 tokens/s, Running: 93 reqs, Waiting: 4 reqs, GPU KV cache usage: 13.4%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [energy_sched] iter=1150 f*=1050 |B|=96 solve_ms=7.65 exec_ms=68.56
+(EngineCore pid=44060) [dbg] iter=1150 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-65998
+(APIServer pid=43995) INFO:     127.0.0.1:38888 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38932 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1160 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-66568
+(APIServer pid=43995) INFO:     127.0.0.1:38894 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1170 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-67122
+(APIServer pid=43995) INFO:     127.0.0.1:38904 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1180 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-67672
+(APIServer pid=43995) INFO:     127.0.0.1:38892 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38928 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1190 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-68220
+(APIServer pid=43995) INFO:     127.0.0.1:38826 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38968 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1200 f*=990 |B|=96 solve_ms=7.33 exec_ms=41.35
+(EngineCore pid=44060) [dbg] iter=1200 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-68914
+(APIServer pid=43995) INFO:     127.0.0.1:38978 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1210 all=100(p=5d=95) picked=96(p=1d=95) f=1050 eff_eta=200 min_sl=-69413
+(APIServer pid=43995) INFO:     127.0.0.1:38958 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38860 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39014 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1220 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-70416
+(APIServer pid=43995) INFO:     127.0.0.1:39016 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1230 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-70948
+(APIServer pid=43995) INFO:     127.0.0.1:38962 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38864 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1240 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-71614
+(APIServer pid=43995) INFO:     127.0.0.1:38832 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38888 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38998 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1250 f*=990 |B|=96 solve_ms=7.55 exec_ms=73.36
+(EngineCore pid=44060) [dbg] iter=1250 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-72181
+(APIServer pid=43995) INFO:     127.0.0.1:38836 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38908 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1260 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-72735
+(APIServer pid=43995) INFO:     127.0.0.1:38890 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1270 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-73480
+(APIServer pid=43995) INFO:     127.0.0.1:38900 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1280 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-74018
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1290 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-74541
+(APIServer pid=43995) INFO:     127.0.0.1:38938 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39020 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1300 f*=990 |B|=95 solve_ms=7.33 exec_ms=73.06
+(APIServer pid=43995) INFO:     127.0.0.1:38914 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1300 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-75119
+(EngineCore pid=44060) [dbg] iter=1310 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-75630
+(APIServer pid=43995) INFO 04-24 15:42:56 [loggers.py:259] Engine 000: Avg prompt throughput: 484.0 tokens/s, Avg generation throughput: 1580.6 tokens/s, Running: 96 reqs, Waiting: 4 reqs, GPU KV cache usage: 16.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=43995) INFO:     127.0.0.1:39018 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1320 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-76131
+(APIServer pid=43995) INFO:     127.0.0.1:38892 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38920 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38870 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1330 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-76703
+(EngineCore pid=44060) [dbg] iter=1340 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-77196
+(APIServer pid=43995) INFO:     127.0.0.1:38806 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38814 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38978 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38946 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1350 f*=1050 |B|=96 solve_ms=7.50 exec_ms=40.95
+(EngineCore pid=44060) [dbg] iter=1350 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-77872
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39006 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1360 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-78488
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38890 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1370 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-79042
+(APIServer pid=43995) INFO:     127.0.0.1:38908 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1380 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-79567
+(APIServer pid=43995) INFO:     127.0.0.1:38914 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39002 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1390 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-80240
+(EngineCore pid=44060) [energy_sched] iter=1400 f*=990 |B|=96 solve_ms=7.66 exec_ms=41.54
+(EngineCore pid=44060) [dbg] iter=1400 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-80748
+(APIServer pid=43995) INFO:     127.0.0.1:38984 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1410 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-81271
+(EngineCore pid=44060) [dbg] iter=1420 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-81768
+(EngineCore pid=44060) [dbg] iter=1430 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-82266
+(APIServer pid=43995) INFO:     127.0.0.1:38904 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38842 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38886 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1440 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-82984
+(APIServer pid=43995) INFO:     127.0.0.1:38850 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1450 f*=990 |B|=96 solve_ms=7.45 exec_ms=41.27
+(EngineCore pid=44060) [dbg] iter=1450 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-83553
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38820 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38874 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38950 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1460 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-84171
+(APIServer pid=43995) INFO:     127.0.0.1:39004 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1470 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-84718
+(APIServer pid=43995) INFO:     127.0.0.1:39008 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1480 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-85248
+(APIServer pid=43995) INFO:     127.0.0.1:38922 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38880 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1490 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-85802
+(APIServer pid=43995) INFO 04-24 15:43:06 [loggers.py:259] Engine 000: Avg prompt throughput: 286.1 tokens/s, Avg generation throughput: 1695.8 tokens/s, Running: 96 reqs, Waiting: 4 reqs, GPU KV cache usage: 16.9%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [energy_sched] iter=1500 f*=990 |B|=96 solve_ms=7.37 exec_ms=41.13
+(EngineCore pid=44060) [dbg] iter=1500 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-86299
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38940 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38878 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1510 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-86881
+(APIServer pid=43995) INFO:     127.0.0.1:38838 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38948 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38990 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1520 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-87646
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38912 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1530 all=99(p=5d=94) picked=94(p=0d=94) f=990 eff_eta=200 min_sl=-88172
+(APIServer pid=43995) INFO:     127.0.0.1:39012 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38924 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38946 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1540 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-89250
+(APIServer pid=43995) INFO:     127.0.0.1:38920 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38972 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38996 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1550 f*=990 |B|=96 solve_ms=7.69 exec_ms=59.53
+(EngineCore pid=44060) [dbg] iter=1550 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-89829
+(EngineCore pid=44060) [dbg] iter=1560 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-90327
+(APIServer pid=43995) INFO:     127.0.0.1:38934 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1570 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-90975
+(APIServer pid=43995) INFO:     127.0.0.1:38944 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1580 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-91721
+(APIServer pid=43995) INFO:     127.0.0.1:38930 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1590 all=98(p=4d=94) picked=94(p=0d=94) f=990 eff_eta=200 min_sl=-92418
+(APIServer pid=43995) INFO:     127.0.0.1:38976 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38956 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:39000 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38928 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38962 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1600 f*=1050 |B|=96 solve_ms=7.56 exec_ms=76.56
+(EngineCore pid=44060) [dbg] iter=1600 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-93155
+(APIServer pid=43995) INFO:     127.0.0.1:39006 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1610 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-93970
+(APIServer pid=43995) INFO:     127.0.0.1:38886 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38910 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38854 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1620 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-94541
+(EngineCore pid=44060) [dbg] iter=1630 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-95046
+(APIServer pid=43995) INFO:     127.0.0.1:38912 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1640 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-95546
+(APIServer pid=43995) INFO 04-24 15:43:16 [loggers.py:259] Engine 000: Avg prompt throughput: 796.0 tokens/s, Avg generation throughput: 1473.7 tokens/s, Running: 96 reqs, Waiting: 4 reqs, GPU KV cache usage: 17.9%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [energy_sched] iter=1650 f*=990 |B|=96 solve_ms=7.44 exec_ms=40.83
+(EngineCore pid=44060) [dbg] iter=1650 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-96075
+(APIServer pid=43995) INFO:     127.0.0.1:38818 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1660 all=99(p=5d=94) picked=95(p=1d=94) f=990 eff_eta=200 min_sl=-96574
+(APIServer pid=43995) INFO:     127.0.0.1:38808 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1670 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-97112
+(APIServer pid=43995) INFO:     127.0.0.1:39010 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38974 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1680 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-97670
+(APIServer pid=43995) INFO:     127.0.0.1:38836 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38900 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38962 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38878 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38960 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1690 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-98469
+(APIServer pid=43995) INFO:     127.0.0.1:39014 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1700 f*=990 |B|=96 solve_ms=7.67 exec_ms=42.22
+(EngineCore pid=44060) [dbg] iter=1700 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-99023
+(APIServer pid=43995) INFO:     127.0.0.1:38992 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1710 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-99558
+(EngineCore pid=44060) [dbg] iter=1720 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-100075
+(APIServer pid=43995) INFO:     127.0.0.1:38862 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38982 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1730 all=100(p=5d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-100612
+(EngineCore pid=44060) [dbg] iter=1740 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-101407
+(APIServer pid=43995) INFO:     127.0.0.1:38858 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38912 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38812 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1750 f*=990 |B|=96 solve_ms=10.16 exec_ms=41.68
+(EngineCore pid=44060) [dbg] iter=1750 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-102020
+(APIServer pid=43995) INFO:     127.0.0.1:38816 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38926 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1760 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-102775
+(APIServer pid=43995) INFO:     127.0.0.1:38988 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1770 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-103322
+(APIServer pid=43995) INFO:     127.0.0.1:38866 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38936 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38932 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38970 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1780 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-103928
+(EngineCore pid=44060) [dbg] iter=1790 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-104450
+(APIServer pid=43995) INFO:     127.0.0.1:38968 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1800 f*=990 |B|=96 solve_ms=7.61 exec_ms=42.69
+(EngineCore pid=44060) [dbg] iter=1800 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-104990
+(APIServer pid=43995) INFO:     127.0.0.1:39004 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38844 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38918 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1810 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-105729
+(APIServer pid=43995) INFO:     127.0.0.1:38882 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO 04-24 15:43:26 [loggers.py:259] Engine 000: Avg prompt throughput: 418.0 tokens/s, Avg generation throughput: 1598.7 tokens/s, Running: 95 reqs, Waiting: 4 reqs, GPU KV cache usage: 16.6%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=1820 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-106248
+(EngineCore pid=44060) [dbg] iter=1830 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-106745
+(APIServer pid=43995) INFO:     127.0.0.1:39020 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38864 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38960 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1840 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-107449
+(APIServer pid=43995) INFO:     127.0.0.1:38980 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38952 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1850 f*=990 |B|=96 solve_ms=7.39 exec_ms=41.28
+(EngineCore pid=44060) [dbg] iter=1850 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-108160
+(APIServer pid=43995) INFO:     127.0.0.1:38914 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38896 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38998 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1860 all=100(p=5d=95) picked=96(p=1d=95) f=990 eff_eta=200 min_sl=-108729
+(APIServer pid=43995) INFO:     127.0.0.1:38830 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1870 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-109291
+(APIServer pid=43995) INFO:     127.0.0.1:38964 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1880 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-109821
+(APIServer pid=43995) INFO:     127.0.0.1:38884 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38908 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38834 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1890 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-110383
+(APIServer pid=43995) INFO:     127.0.0.1:38892 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38842 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38886 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38840 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [energy_sched] iter=1900 f*=990 |B|=96 solve_ms=7.53 exec_ms=72.92
+(EngineCore pid=44060) [dbg] iter=1900 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-110969
+(APIServer pid=43995) INFO:     127.0.0.1:39014 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1910 all=99(p=4d=95) picked=95(p=0d=95) f=990 eff_eta=200 min_sl=-111644
+(APIServer pid=43995) INFO:     127.0.0.1:38986 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38950 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=43995) INFO:     127.0.0.1:38906 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=44060) [dbg] iter=1920 all=100(p=4d=96) picked=96(p=0d=96) f=990 eff_eta=200 min_sl=-112196
+(EngineCore pid=44060) [dbg] iter=1930 all=98(p=4d=94) picked=94(p=0d=94) f=990 eff_eta=200 min_sl=-112695
+(EngineCore pid=44060) [dbg] iter=1940 all=98(p=4d=94) picked=94(p=0d=94) f=990 eff_eta=200 min_sl=-113188
+(EngineCore pid=44060) [energy_sched] iter=1950 f*=990 |B|=92 solve_ms=7.50 exec_ms=41.54
+(EngineCore pid=44060) [dbg] iter=1950 all=96(p=4d=92) picked=92(p=0d=92) f=990 eff_eta=200 min_sl=-113684
+(EngineCore pid=44060) [dbg] iter=1960 all=94(p=4d=90) picked=90(p=0d=90) f=990 eff_eta=200 min_sl=-114210
+(EngineCore pid=44060) [dbg] iter=1970 all=91(p=4d=87) picked=87(p=0d=87) f=990 eff_eta=200 min_sl=-114704
+(EngineCore pid=44060) [dbg] iter=1980 all=88(p=4d=84) picked=84(p=0d=84) f=990 eff_eta=200 min_sl=-115190
+(EngineCore pid=44060) [dbg] iter=1990 all=87(p=4d=83) picked=83(p=0d=83) f=990 eff_eta=200 min_sl=-115669
+(APIServer pid=43995) INFO 04-24 15:43:36 [loggers.py:259] Engine 000: Avg prompt throughput: 212.4 tokens/s, Avg generation throughput: 1698.6 tokens/s, Running: 83 reqs, Waiting: 4 reqs, GPU KV cache usage: 14.9%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [energy_sched] iter=2000 f*=990 |B|=82 solve_ms=6.41 exec_ms=39.70
+(EngineCore pid=44060) [dbg] iter=2000 all=86(p=4d=82) picked=82(p=0d=82) f=990 eff_eta=200 min_sl=-116148
+(EngineCore pid=44060) [dbg] iter=2010 all=86(p=4d=82) picked=82(p=0d=82) f=990 eff_eta=200 min_sl=-116618
+(EngineCore pid=44060) [dbg] iter=2020 all=85(p=4d=81) picked=81(p=0d=81) f=990 eff_eta=200 min_sl=-117088
+(EngineCore pid=44060) [dbg] iter=2030 all=83(p=4d=79) picked=79(p=0d=79) f=990 eff_eta=200 min_sl=-117556
+(EngineCore pid=44060) [dbg] iter=2040 all=81(p=4d=77) picked=77(p=0d=77) f=990 eff_eta=200 min_sl=-118024
+(EngineCore pid=44060) [energy_sched] iter=2050 f*=990 |B|=76 solve_ms=6.25 exec_ms=39.18
+(EngineCore pid=44060) [dbg] iter=2050 all=80(p=4d=76) picked=76(p=0d=76) f=990 eff_eta=200 min_sl=-118489
+(EngineCore pid=44060) [dbg] iter=2060 all=80(p=4d=76) picked=76(p=0d=76) f=990 eff_eta=200 min_sl=-118954
+(EngineCore pid=44060) [dbg] iter=2070 all=78(p=4d=74) picked=74(p=0d=74) f=990 eff_eta=200 min_sl=-119431
+(EngineCore pid=44060) [dbg] iter=2080 all=77(p=4d=73) picked=73(p=0d=73) f=990 eff_eta=200 min_sl=-119895
+(EngineCore pid=44060) [dbg] iter=2090 all=76(p=4d=72) picked=72(p=0d=72) f=990 eff_eta=200 min_sl=-120364
+(EngineCore pid=44060) [energy_sched] iter=2100 f*=990 |B|=70 solve_ms=5.71 exec_ms=39.23
+(EngineCore pid=44060) [dbg] iter=2100 all=74(p=4d=70) picked=70(p=0d=70) f=990 eff_eta=200 min_sl=-120825
+(EngineCore pid=44060) [dbg] iter=2110 all=71(p=4d=67) picked=67(p=0d=67) f=990 eff_eta=200 min_sl=-121282
+(EngineCore pid=44060) [dbg] iter=2120 all=68(p=4d=64) picked=64(p=0d=64) f=990 eff_eta=200 min_sl=-121738
+(EngineCore pid=44060) [dbg] iter=2130 all=67(p=4d=63) picked=63(p=0d=63) f=990 eff_eta=200 min_sl=-122163
+(EngineCore pid=44060) [dbg] iter=2140 all=67(p=4d=63) picked=63(p=0d=63) f=990 eff_eta=200 min_sl=-122589
+(EngineCore pid=44060) [energy_sched] iter=2150 f*=990 |B|=61 solve_ms=5.54 exec_ms=36.85
+(EngineCore pid=44060) [dbg] iter=2150 all=65(p=4d=61) picked=61(p=0d=61) f=990 eff_eta=200 min_sl=-123021
+(EngineCore pid=44060) [dbg] iter=2160 all=63(p=3d=60) picked=60(p=0d=60) f=990 eff_eta=200 min_sl=-123809
+(EngineCore pid=44060) [dbg] iter=2170 all=61(p=3d=58) picked=58(p=0d=58) f=990 eff_eta=200 min_sl=-124256
+(EngineCore pid=44060) [dbg] iter=2180 all=59(p=3d=56) picked=56(p=0d=56) f=990 eff_eta=200 min_sl=-124686
+(EngineCore pid=44060) [dbg] iter=2190 all=58(p=3d=55) picked=55(p=0d=55) f=990 eff_eta=200 min_sl=-125113
+(EngineCore pid=44060) [energy_sched] iter=2200 f*=990 |B|=54 solve_ms=4.30 exec_ms=36.66
+(EngineCore pid=44060) [dbg] iter=2200 all=57(p=3d=54) picked=54(p=0d=54) f=990 eff_eta=200 min_sl=-125536
+(APIServer pid=43995) INFO 04-24 15:43:46 [loggers.py:259] Engine 000: Avg prompt throughput: 159.8 tokens/s, Avg generation throughput: 1465.2 tokens/s, Running: 54 reqs, Waiting: 3 reqs, GPU KV cache usage: 13.1%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=2210 all=57(p=3d=54) picked=54(p=0d=54) f=990 eff_eta=200 min_sl=-125960
+(EngineCore pid=44060) [dbg] iter=2220 all=56(p=3d=53) picked=53(p=0d=53) f=990 eff_eta=200 min_sl=-126382
+(EngineCore pid=44060) [dbg] iter=2230 all=54(p=3d=51) picked=51(p=0d=51) f=990 eff_eta=200 min_sl=-126791
+(EngineCore pid=44060) [dbg] iter=2240 all=51(p=3d=48) picked=48(p=0d=48) f=990 eff_eta=200 min_sl=-127196
+(EngineCore pid=44060) [energy_sched] iter=2250 f*=990 |B|=46 solve_ms=3.69 exec_ms=35.53
+(EngineCore pid=44060) [dbg] iter=2250 all=49(p=3d=46) picked=46(p=0d=46) f=990 eff_eta=200 min_sl=-127598
+(EngineCore pid=44060) [dbg] iter=2260 all=49(p=3d=46) picked=46(p=0d=46) f=990 eff_eta=200 min_sl=-127999
+(EngineCore pid=44060) [dbg] iter=2270 all=48(p=3d=45) picked=45(p=0d=45) f=990 eff_eta=200 min_sl=-128398
+(EngineCore pid=44060) [dbg] iter=2280 all=45(p=3d=42) picked=42(p=0d=42) f=990 eff_eta=200 min_sl=-128795
+(EngineCore pid=44060) [dbg] iter=2290 all=43(p=3d=40) picked=40(p=0d=40) f=990 eff_eta=200 min_sl=-129189
+(EngineCore pid=44060) [energy_sched] iter=2300 f*=990 |B|=39 solve_ms=3.16 exec_ms=34.97
+(EngineCore pid=44060) [dbg] iter=2300 all=42(p=3d=39) picked=39(p=0d=39) f=990 eff_eta=200 min_sl=-129586
+(EngineCore pid=44060) [dbg] iter=2310 all=42(p=3d=39) picked=39(p=0d=39) f=990 eff_eta=200 min_sl=-129979
+(EngineCore pid=44060) [dbg] iter=2320 all=42(p=3d=39) picked=39(p=0d=39) f=990 eff_eta=200 min_sl=-130371
+(EngineCore pid=44060) [dbg] iter=2330 all=40(p=3d=37) picked=37(p=0d=37) f=990 eff_eta=200 min_sl=-130761
+(EngineCore pid=44060) [dbg] iter=2340 all=38(p=3d=35) picked=35(p=0d=35) f=990 eff_eta=200 min_sl=-131149
+(EngineCore pid=44060) [energy_sched] iter=2350 f*=990 |B|=34 solve_ms=5.02 exec_ms=34.85
+(EngineCore pid=44060) [dbg] iter=2350 all=37(p=3d=34) picked=34(p=0d=34) f=990 eff_eta=200 min_sl=-131542
+(EngineCore pid=44060) [dbg] iter=2360 all=36(p=3d=33) picked=33(p=0d=33) f=990 eff_eta=200 min_sl=-131922
+(EngineCore pid=44060) [dbg] iter=2370 all=35(p=3d=32) picked=32(p=0d=32) f=990 eff_eta=200 min_sl=-132282
+(EngineCore pid=44060) [dbg] iter=2380 all=35(p=3d=32) picked=32(p=0d=32) f=990 eff_eta=200 min_sl=-132634
+(EngineCore pid=44060) [dbg] iter=2390 all=35(p=3d=32) picked=32(p=0d=32) f=990 eff_eta=200 min_sl=-133009
+(EngineCore pid=44060) [energy_sched] iter=2400 f*=990 |B|=30 solve_ms=2.53 exec_ms=31.46
+(EngineCore pid=44060) [dbg] iter=2400 all=33(p=3d=30) picked=30(p=0d=30) f=990 eff_eta=200 min_sl=-133356
+(EngineCore pid=44060) [dbg] iter=2410 all=30(p=3d=27) picked=27(p=0d=27) f=990 eff_eta=200 min_sl=-133701
+(EngineCore pid=44060) [dbg] iter=2420 all=30(p=3d=27) picked=27(p=0d=27) f=990 eff_eta=200 min_sl=-134050
+(EngineCore pid=44060) [dbg] iter=2430 all=28(p=3d=25) picked=25(p=0d=25) f=930 eff_eta=200 min_sl=-134439
+(EngineCore pid=44060) [dbg] iter=2440 all=28(p=3d=25) picked=25(p=0d=25) f=930 eff_eta=200 min_sl=-134778
+(EngineCore pid=44060) [energy_sched] iter=2450 f*=930 |B|=24 solve_ms=2.12 exec_ms=31.26
+(EngineCore pid=44060) [dbg] iter=2450 all=27(p=3d=24) picked=24(p=0d=24) f=930 eff_eta=200 min_sl=-135118
+(EngineCore pid=44060) [dbg] iter=2460 all=27(p=3d=24) picked=24(p=0d=24) f=930 eff_eta=200 min_sl=-135456
+(EngineCore pid=44060) [dbg] iter=2470 all=27(p=3d=24) picked=24(p=0d=24) f=930 eff_eta=200 min_sl=-135797
+(APIServer pid=43995) INFO 04-24 15:43:56 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 968.6 tokens/s, Running: 24 reqs, Waiting: 3 reqs, GPU KV cache usage: 7.0%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=2480 all=26(p=3d=23) picked=23(p=0d=23) f=930 eff_eta=200 min_sl=-136138
+(EngineCore pid=44060) [dbg] iter=2490 all=25(p=3d=22) picked=22(p=0d=22) f=930 eff_eta=200 min_sl=-136478
+(EngineCore pid=44060) [energy_sched] iter=2500 f*=930 |B|=22 solve_ms=1.99 exec_ms=31.33
+(EngineCore pid=44060) [dbg] iter=2500 all=25(p=3d=22) picked=22(p=0d=22) f=930 eff_eta=200 min_sl=-136815
+(EngineCore pid=44060) [dbg] iter=2510 all=25(p=3d=22) picked=22(p=0d=22) f=930 eff_eta=200 min_sl=-137151
+(EngineCore pid=44060) [dbg] iter=2520 all=25(p=3d=22) picked=22(p=0d=22) f=930 eff_eta=200 min_sl=-137489
+(EngineCore pid=44060) [dbg] iter=2530 all=25(p=3d=22) picked=22(p=0d=22) f=930 eff_eta=200 min_sl=-137827
+(EngineCore pid=44060) [dbg] iter=2540 all=24(p=3d=21) picked=21(p=0d=21) f=930 eff_eta=200 min_sl=-138164
+(EngineCore pid=44060) [energy_sched] iter=2550 f*=930 |B|=21 solve_ms=1.90 exec_ms=30.58
+(EngineCore pid=44060) [dbg] iter=2550 all=24(p=3d=21) picked=21(p=0d=21) f=930 eff_eta=200 min_sl=-138494
+(EngineCore pid=44060) [dbg] iter=2560 all=23(p=3d=20) picked=20(p=0d=20) f=930 eff_eta=200 min_sl=-138822
+(EngineCore pid=44060) [dbg] iter=2570 all=23(p=3d=20) picked=20(p=0d=20) f=930 eff_eta=200 min_sl=-139148
+(EngineCore pid=44060) [dbg] iter=2580 all=20(p=3d=17) picked=17(p=0d=17) f=930 eff_eta=200 min_sl=-139473
+(EngineCore pid=44060) [dbg] iter=2590 all=19(p=3d=16) picked=16(p=0d=16) f=930 eff_eta=200 min_sl=-139775
+(EngineCore pid=44060) [energy_sched] iter=2600 f*=930 |B|=14 solve_ms=1.43 exec_ms=27.50
+(EngineCore pid=44060) [dbg] iter=2600 all=17(p=3d=14) picked=14(p=0d=14) f=930 eff_eta=200 min_sl=-140068
+(EngineCore pid=44060) [dbg] iter=2610 all=16(p=3d=13) picked=13(p=0d=13) f=930 eff_eta=200 min_sl=-140363
+(EngineCore pid=44060) [dbg] iter=2620 all=15(p=3d=12) picked=12(p=0d=12) f=930 eff_eta=200 min_sl=-140654
+(EngineCore pid=44060) [dbg] iter=2630 all=14(p=3d=11) picked=11(p=0d=11) f=930 eff_eta=200 min_sl=-140945
+(EngineCore pid=44060) [dbg] iter=2640 all=14(p=3d=11) picked=11(p=0d=11) f=930 eff_eta=200 min_sl=-141235
+(EngineCore pid=44060) [energy_sched] iter=2650 f*=930 |B|=10 solve_ms=1.15 exec_ms=27.57
+(EngineCore pid=44060) [dbg] iter=2650 all=13(p=3d=10) picked=10(p=0d=10) f=930 eff_eta=200 min_sl=-141526
+(EngineCore pid=44060) [dbg] iter=2660 all=13(p=3d=10) picked=10(p=0d=10) f=930 eff_eta=200 min_sl=-141816
+(EngineCore pid=44060) [dbg] iter=2670 all=13(p=3d=10) picked=10(p=0d=10) f=930 eff_eta=200 min_sl=-142108
+(EngineCore pid=44060) [dbg] iter=2680 all=12(p=3d=9) picked=9(p=0d=9) f=930 eff_eta=200 min_sl=-142401
+(EngineCore pid=44060) [dbg] iter=2690 all=12(p=3d=9) picked=9(p=0d=9) f=930 eff_eta=200 min_sl=-142690
+(EngineCore pid=44060) [energy_sched] iter=2700 f*=930 |B|=8 solve_ms=1.00 exec_ms=27.41
+(EngineCore pid=44060) [dbg] iter=2700 all=11(p=3d=8) picked=8(p=0d=8) f=930 eff_eta=200 min_sl=-142977
+(EngineCore pid=44060) [dbg] iter=2710 all=10(p=3d=7) picked=7(p=0d=7) f=930 eff_eta=200 min_sl=-143260
+(EngineCore pid=44060) [dbg] iter=2720 all=10(p=3d=7) picked=7(p=0d=7) f=930 eff_eta=200 min_sl=-143543
+(EngineCore pid=44060) [dbg] iter=2730 all=10(p=3d=7) picked=7(p=0d=7) f=930 eff_eta=200 min_sl=-143825
+(EngineCore pid=44060) [dbg] iter=2740 all=9(p=3d=6) picked=6(p=0d=6) f=930 eff_eta=200 min_sl=-144107
+(EngineCore pid=44060) [energy_sched] iter=2750 f*=930 |B|=6 solve_ms=0.86 exec_ms=27.07
+(EngineCore pid=44060) [dbg] iter=2750 all=9(p=3d=6) picked=6(p=0d=6) f=930 eff_eta=200 min_sl=-144390
+(EngineCore pid=44060) [dbg] iter=2760 all=9(p=3d=6) picked=6(p=0d=6) f=930 eff_eta=200 min_sl=-144672
+(EngineCore pid=44060) [dbg] iter=2770 all=9(p=3d=6) picked=6(p=0d=6) f=930 eff_eta=200 min_sl=-144955
+(EngineCore pid=44060) [dbg] iter=2780 all=7(p=3d=4) picked=1(p=1d=0) f=1410 eff_eta=200 min_sl=-145233
+(APIServer pid=43995) INFO 04-24 15:44:06 [loggers.py:259] Engine 000: Avg prompt throughput: 174.9 tokens/s, Avg generation throughput: 428.7 tokens/s, Running: 5 reqs, Waiting: 2 reqs, GPU KV cache usage: 2.0%, Prefix cache hit rate: 0.0%
+(EngineCore pid=44060) [dbg] iter=2790 all=7(p=2d=5) picked=5(p=0d=5) f=930 eff_eta=200 min_sl=-145844
+(EngineCore pid=44060) [energy_sched] iter=2800 f*=930 |B|=4 solve_ms=0.68 exec_ms=26.24
+(EngineCore pid=44060) [dbg] iter=2800 all=5(p=2d=3) picked=3(p=0d=3) f=930 eff_eta=200 min_sl=-146117
+(EngineCore pid=44060) [dbg] iter=2810 all=5(p=2d=3) picked=3(p=0d=3) f=930 eff_eta=200 min_sl=-146386
+(EngineCore pid=44060) [dbg] iter=2820 all=4(p=2d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=-146653
+(EngineCore pid=44060) [dbg] iter=2830 all=4(p=2d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=-146920
+(EngineCore pid=44060) [dbg] iter=2840 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-147182
+(EngineCore pid=44060) [energy_sched] iter=2850 f*=930 |B|=1 solve_ms=0.43 exec_ms=25.11
+(EngineCore pid=44060) [dbg] iter=2850 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-147440
+(EngineCore pid=44060) [dbg] iter=2860 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-147699
+(EngineCore pid=44060) [dbg] iter=2870 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-147957
+(EngineCore pid=44060) [dbg] iter=2880 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-148215
+(EngineCore pid=44060) [dbg] iter=2890 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-148472
+(EngineCore pid=44060) [energy_sched] iter=2900 f*=930 |B|=1 solve_ms=0.42 exec_ms=25.21
+(EngineCore pid=44060) [dbg] iter=2900 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-148730
+(EngineCore pid=44060) [dbg] iter=2910 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-148988
+(EngineCore pid=44060) [dbg] iter=2920 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-149247
+(EngineCore pid=44060) [dbg] iter=2930 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-149505
+(EngineCore pid=44060) [dbg] iter=2940 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-149764
+(EngineCore pid=44060) [energy_sched] iter=2950 f*=930 |B|=1 solve_ms=0.42 exec_ms=25.16
+(EngineCore pid=44060) [dbg] iter=2950 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-150022
+(EngineCore pid=44060) [dbg] iter=2960 all=3(p=2d=1) picked=1(p=0d=1) f=930 eff_eta=200 min_sl=-150280
+(EngineCore pid=44060) [dbg] iter=2970 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=2980 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=2990 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=20
+(EngineCore pid=44060) [energy_sched] iter=3000 f*=930 |B|=2 solve_ms=0.22 exec_ms=26.01
+(EngineCore pid=44060) [dbg] iter=3000 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3010 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3020 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=22
+(EngineCore pid=44060) [dbg] iter=3030 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [dbg] iter=3040 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
+(EngineCore pid=44060) [energy_sched] iter=3050 f*=930 |B|=2 solve_ms=0.21 exec_ms=26.03
+(EngineCore pid=44060) [dbg] iter=3050 all=2(p=0d=2) picked=2(p=0d=2) f=930 eff_eta=200 min_sl=23
