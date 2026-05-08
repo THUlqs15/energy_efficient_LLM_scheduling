@@ -19,8 +19,10 @@ def trapz(xs, ys):
 def interpolate_power(ts, xs, ys):
     if not xs:
         return None
-    if ts < xs[0] or ts > xs[-1]:
-        return None
+    if ts < xs[0]:
+        return ys[0]
+    if ts > xs[-1]:
+        return ys[-1]
     if ts == xs[0]:
         return ys[0]
     if ts == xs[-1]:

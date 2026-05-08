@@ -5,7 +5,7 @@
 We run a single vLLM server serving Qwen3-14B on an A800-SXM4-80GB GPU and compare two schedulers on the same workload:
 
 - **Baseline**: vLLM's default FCFS scheduler, GPU clocks not locked.
-- **Ours (custom)**: an energy-aware scheduler that solves a per-iteration frequency-first optimisation (enumerating `(f, M)` pairs and solving a 2-D knapsack), and attempts to lock the SM clock via `pynvml` on every iteration.
+- **Ours (custom)**: an energy-aware scheduler based on the **Alt-1 Heuristic** formulation — a three-step algorithm (priority scoring → greedy fill → joint prefix×frequency enumeration) with online adaptive weight updates. The scheduler selects both the GPU SM frequency and batch composition per iteration, locking the SM clock via `pynvml`.
 
 Reported metrics include mean TTFT/TPOT, SLO violations, power, energy, and the mean solve-to-execution ratio.
 
@@ -23,11 +23,11 @@ bash main.sh
 
 ## 3. Files Created — Full Code Review
 
-### 3.1 `main.sh` (267 lines) — Master experiment orchestrator
+### 3.1 `main.sh` (284 lines) — Master experiment orchestrator
 
 **Purpose**: Controls the full experiment lifecycle — applies the vLLM patch, generates the workload trace, launches the vLLM server, replays the workload, logs power, collects metrics, and compares results.
 
-**L1–99: USER KNOBS block** — All tunable parameters are declared as Bash variables at the top of the file. The reviewer can change any of these before running:
+**L1–110: USER KNOBS block** — All tunable parameters are declared as Bash variables at the top of the file:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -39,119 +39,127 @@ bash main.sh
 | `PORT` | `8000` | HTTP port for vLLM API server |
 | `GPU_INDEX` | `0` | Which GPU to use (CUDA device index) |
 | `MAX_MODEL_LEN` | `8192` | Max sequence length (input + output tokens) |
-| `MAX_NUM_SEQS` | `128` | Max concurrent requests in the engine |
+| `MAX_NUM_SEQS` | `64` | Max concurrent requests in the engine |
 | `GPU_MEM_UTIL` | `0.90` | Fraction of GPU memory for KV cache |
 | `NUM_REQUESTS` | `400` | Number of requests in the workload |
-| `RATE_QPS` | `10` | Arrival rate (requests/second) |
+| `RATE_QPS` | `4` | Arrival rate (requests/second) |
 | `MIN_OUT_TOK` / `MAX_OUT_TOK` | `64` / `1024` | Output token range per request |
 | `TRACE_SEED` | `42` | Random seed for trace generation |
-| `BETA` | `0.01` | Energy-utility trade-off (larger = more energy-saving) |
-| `W_TTFT` | `2000.0` | Weight for TTFT in priority calculation |
-| `W_TPOT` | `50.0` | Weight for TPOT in priority calculation |
-| `ETA_MS` | `200` | Per-iteration time budget (milliseconds) |
+| `BETA` | `0.0` | Energy-utility trade-off (larger = more energy-saving) |
+| `W_TTFT` | `100000.0` | Initial weight for TTFT in priority calculation (mutable — drifts online) |
+| `W_TPOT` | `1.0` | Initial weight for TPOT in priority calculation (mutable — drifts online) |
+| `ETA_MS` | `200` | Per-iteration time budget η (ms); accepted for compat but currently unused by solver |
 | `LMAX` | `0` | Max tokens per batch (0 = inherit vLLM default) |
-| `FREQ_STRIDE` | `4` | Stride for frequency candidate subsampling |
+| `FREQ_STRIDE` | `3` | Stride for frequency candidate subsampling |
+| `EVICTION_MODE` | `1` | KV cache eviction strategy (1=conservative, 2=incremental, 3=preempt) |
+| `SOLUTION_MODE` | `2` | Solver heuristic (1=H2 freq-indep priority, 2=H3 freq-dep priority) |
 | `POWER_INTERVAL_S` | `0.1` | GPU power sampling interval (seconds) |
 
-**L101**: Captures the script directory so all paths are absolute regardless of CWD.
+**L113**: Captures the script directory so all paths are absolute regardless of CWD.
 
-**L104–114**: Conda activation. Tries four possible `conda.sh` locations (miniconda3, anaconda3, /opt/conda), sources the first one found, then activates the `myvllm` environment.
+**L116–126**: Conda activation. Tries four possible `conda.sh` locations (miniconda3, anaconda3, /opt/conda), sources the first one found, then activates the `myvllm` environment.
 
-**L120**: Calls `apply_patch.sh` to copy the energy scheduler Python files into the vLLM source tree. This is idempotent — it checks for a sentinel marker before appending.
+**L131**: Calls `apply_patch.sh` to copy the energy scheduler Python files into the vLLM source tree. This is idempotent — it checks for a sentinel marker before appending.
 
-**L123–128**: Conditional trace generation. If `trace.jsonl` already exists, it is reused (skipping the 10–20 second dataset scan). Delete the file to force regeneration.
+**L134–141**: Conditional trace generation. If `trace.jsonl` already exists, it is reused. Delete the file to force regeneration.
 
-**L133–248: `run_experiment()` function** — The core experiment runner:
+**L145–265: `run_experiment()` function** — The core experiment runner:
 
-- **L134–139**: Maps `"default"`/`"custom"` label to the output file suffix.
-- **L143–160**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0` (the hook in `vllm/__init__.py` is a no-op). For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, etc.) and the iteration log path.
-- **L168–178**: Launches the vLLM server as a background process. Key flags:
+- **L148–152**: Maps `"default"`/`"custom"` label to the output file suffix.
+- **L156–174**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0`. For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, `VLLM_ENERGY_W_TPOT`, `VLLM_ENERGY_LMAX`, `VLLM_ENERGY_FREQ_STRIDE`, `VLLM_ENERGY_EVICTION_MODE`, `VLLM_ENERGY_SOLUTION_MODE`, `VLLM_ENERGY_ETA_MS`, `VLLM_ENERGY_GPU_INDEX`, `VLLM_ENERGY_ITER_LOG`).
+- **L182–195**: Launches the vLLM server as a background process. Key flags:
   - `--enforce-eager`: Disables CUDA graphs (needed because frequency changes invalidate graph caches)
   - `--no-async-scheduling`: Disables async scheduling so the scheduler sees all running/waiting requests at each iteration
   - `--no-enable-chunked-prefill`: Disables chunked prefill (our scheduler operates at the batch level)
   - `--no-enable-prefix-caching`: Disables prefix caching (simplifies KV cache accounting)
+  - `--enable-logging-iteration-details`: Enables detailed per-iteration logging in server log
   - stdout/stderr redirected to `server_${label}.log`
-- **L183–194**: Health check loop. Polls `http://localhost:PORT/health` every 2 seconds for up to 240 seconds. If the server process dies before becoming ready, prints the log and exits.
-- **L197–202**: Starts `power_logger.py` as a background process, sampling GPU power every 0.1s.
-- **L205–210**: Runs `workload_sender.py` synchronously — it blocks until all requests are done.
-- **L213–220**: Stops the power logger and server via `kill`.
-- **L223–232**: Resets GPU clocks to default after custom mode. Uses the `FrequencyController` Python class first, falls back to `nvidia-smi -rgc`.
-- **L235–245**: Runs `metrics_collector.py` to aggregate results into `summary_${label}.json`.
+- **L198–211**: Health check loop. Polls `http://localhost:PORT/health` every 2 seconds for up to 240 seconds. If the server process dies before becoming ready, prints the log and exits.
+- **L214–219**: Starts `power_logger.py` as a background process, sampling GPU power every 0.1s.
+- **L222–227**: Runs `workload_sender.py` synchronously — it blocks until all requests are done.
+- **L230–232**: Stops the power logger via `kill`.
+- **L235–237**: Stops the vLLM server via `kill`.
+- **L240–248**: Resets GPU clocks to default after custom mode. Uses the `FrequencyController` Python class first, falls back to `nvidia-smi -rgc / -rmc`.
+- **L251–263**: Runs `metrics_collector.py` to aggregate results into `summary_${label}.json`.
 
-**L251–257**: Sequential experiment execution. If `MODE` is `"default"` or `"both"`, runs baseline. If `"custom"` or `"both"`, runs custom. They run sequentially (not parallel) because there is only one GPU.
+**L268–274**: Sequential experiment execution. If `MODE` is `"default"` or `"both"`, runs baseline. If `"custom"` or `"both"`, runs custom.
 
-**L260–266**: Runs `compare_results.py` to produce a side-by-side comparison table and CSV.
+**L277–284**: Runs `compare_results.py` to produce a side-by-side comparison table and CSV.
 
 ---
 
-### 3.2 `scripts/prepare_dataset.py` (145 lines) — Synthetic trace generation
+### 3.2 `scripts/prepare_dataset.py` (149 lines) — Synthetic trace generation
 
 **Purpose**: Ensures the ShareGPT52K dataset is available (auto-downloading if needed, including re-downloading Git LFS pointers), filters and samples prompts, and writes `trace.jsonl` — one JSON record per line representing a single request with its arrival time, prompt, and SLO parameters.
 
-**L18–61: USER KNOBS block**:
+**L17–61: USER KNOBS block**:
 
 | Constant | Default | Meaning |
 |---|---|---|
 | `OUTPUT` | `"trace.jsonl"` | Output file path |
 | `NUM_REQUESTS` | `400` | Number of requests to sample |
-| `RATE_QPS` | `10` | Arrival rate — request i arrives at `i / RATE_QPS` seconds |
-| `TTFT_MEAN_MS` | `1000.0` | Mean TTFT SLO target (ms) |
-| `TTFT_STD_MS` | `200.0` | Std dev of TTFT SLO |
-| `TPOT_MEAN_MS` | `50.0` | Mean TPOT SLO target (ms) |
+| `RATE_QPS` | `4` | Arrival rate — request i arrives at `i / RATE_QPS` seconds |
+| `TTFT_MEAN_MS` | `4000.0` | Mean TTFT SLO target (ms) |
+| `TTFT_STD_MS` | `800.0` | Std dev of TTFT SLO |
+| `TPOT_MEAN_MS` | `100.0` | Mean TPOT SLO target (ms) |
 | `TPOT_STD_MS` | `40.0` | Std dev of TPOT SLO |
 | `MIN_OUTPUT_TOKENS` / `MAX_OUTPUT_TOKENS` | `64` / `1024` | Output token range |
-| `MIN_PROMPT_CHARS` / `MAX_PROMPT_CHARS` | `64` / `8000` | Prompt length filter (characters) |
+| `MIN_PROMPT_CHARS` / `MAX_PROMPT_CHARS` | `512` / `8000` | Prompt length filter (characters) |
 | `SEED` | `42` | Random seed for reproducibility |
 | `DATASET_DIR` | `"data/sharegpt52k"` | Local path to ShareGPT dataset |
 | `REPO_ID` | `"RyokoAI/ShareGPT52K"` | Hugging Face repository ID for auto-download |
 
-**L63–87: `_ensure_dataset()`** — Automatic dataset verification:
-- **L65–68**: If `DATASET_DIR` doesn't exist, downloads the entire dataset via `huggingface_hub.snapshot_download()`.
-- **L70–79**: Checks each `.json` file for Git LFS pointer signatures (file size < 200 bytes, content starts with `version `). If detected, removes the entire directory and re-downloads the real data. This handles the common case where the user cloned the repo (getting LFS pointers instead of actual data) without needing manual cleanup.
+**L64–83: `_ensure_dataset()`** — Automatic dataset verification:
+- If `DATASET_DIR` doesn't exist, downloads via `huggingface_hub.snapshot_download()`.
+- Checks each `.json` file for Git LFS pointer signatures (file size < 200 bytes, content starts with `version `). If detected, removes and re-downloads.
 
-**L89–93: `truncated_normal()`**: Samples from a Gaussian distribution and rejects values ≤ `low`. Used to generate TTFT/TPOT SLO targets that are always positive.
+**L86–90: `truncated_normal()`**: Samples from a Gaussian distribution and rejects values ≤ `low`. Used to generate TTFT/TPOT SLO targets that are always positive.
 
-**L100–113: Dataset loading**:
+**L93–112: Dataset loading**:
 - Iterates all `.json` files in `DATASET_DIR`.
 - For each conversation, extracts the first human/user message.
-- Filters by prompt length (64–8000 characters).
+- Filters by prompt length (512–8000 characters).
 - Handles both ShareGPT format keys (`"from"`/`"value"`) and OpenAI format keys (`"role"`/`"content"`).
 
-**L121–143: Trace writing**:
+**L127–142: Trace writing**:
 - Shuffles all candidate prompts, takes the first `NUM_REQUESTS`.
 - For each request, writes a JSON record with:
   - `id`: unique identifier like `"req_000001"`
-  - `arrival_s`: `i / RATE_QPS` — uniform arrival times (e.g., at 10 QPS, requests arrive every 0.1s)
+  - `arrival_s`: `i / RATE_QPS` — uniform arrival times (at 4 QPS, requests arrive every 0.25s)
   - `prompt`: the actual text content
   - `max_tokens`: uniformly sampled from `[64, 1024]`
-  - `ttft_ms`: sampled from truncated normal (μ=1000, σ=200)
-  - `tpot_ms`: sampled from truncated normal (μ=50, σ=40)
+  - `ttft_ms`: sampled from truncated normal (μ=4000, σ=800)
+  - `tpot_ms`: sampled from truncated normal (μ=100, σ=40)
   - `w_n`: priority weight, default 1.0
 
 ---
 
-### 3.3 `scripts/workload_sender.py` (170 lines) — Async workload replay
+### 3.3 `scripts/workload_sender.py` (173 lines) — Async workload replay
 
 **Purpose**: Reads `trace.jsonl` and asynchronously sends each request to the vLLM `/v1/completions` endpoint with `stream=true`, measuring per-request TTFT and TPOT.
 
-**L16–30: `ResultRecord` dataclass**: Holds per-request metadata (id, prompt length, max_tokens, TTFT/TPOT SLO targets) and results (actual TTFT/TPOT, SLO violations, token count, HTTP status, error message).
+**L19–34: `ResultRecord` dataclass**: Holds per-request metadata and results:
+- `id`, `prompt`, `max_tokens`, `ttft_slo_ms`, `tpot_slo_ms`, `w_n`, `arrival_s`
+- `send_time`: wall-clock epoch (seconds) recorded just before the HTTP POST (new — see §3.3a below)
+- `complete_time`: wall-clock epoch when the request finishes
+- `status`, `ttft_ms`, `tpot_ms`, `num_output_tokens`, `error`
 
-**L33–109: `send_one()`**: Sends a single request and measures timing:
-- **L38–50**: Builds the HTTP POST payload. Passes TTFT/TPOT/w_n to the server via `extra_body.extra_args` — this is how the energy scheduler receives per-request SLO information.
-- **L52–54**: Records `send_time` before the HTTP request.
-- **L56–58**: Awaits the HTTP response. Records `first_token_time` when the first chunk arrives — this is TTFT.
-- **L60–97**: Parses the SSE (Server-Sent Events) stream:
-  - Each line starts with `data: `.
-  - Decodes JSON chunks, extracts the generated text token.
-  - Records the gap between consecutive chunks — these are TPOT values.
-  - Counts total tokens generated.
-- **L99–109**: Error handling — catches network errors, HTTP errors, and timeouts. Records the error in the result.
+**L37–112: `send_one()`**: Sends a single request and measures timing:
+- **L55–67**: Builds the HTTP POST payload. Passes TTFT/TPOT/w_n/**send_time** to the server via the `vllm_xargs` field — this is how the energy scheduler receives per-request SLO information and the client-side send timestamp.
+- **L53**: Records `rr.send_time = wall_time()` before the HTTP POST.
+- **L73–101**: Parses the SSE stream, counting tokens and recording inter-chunk gaps for TPOT computation.
+- **L102–103**: TTFT is measured as `(first_chunk_time - rr.send_time) * 1000.0` — relative to **send_time**, not arrival_time.
 
-**L112–170: `main()`**: Orchestrates the workload replay:
-- **L115–119**: Loads all requests from `trace.jsonl`.
-- **L121–130**: Dispatches requests in order, respecting arrival times. Uses `asyncio.sleep` to wait until `arrival_s` before launching each request as an async task.
-- **L132–140**: Gathers all results, computes SLO violations (max(0, actual - target)).
-- **L142–170**: Writes `results.jsonl` — one JSON record per line with all per-request metrics.
+#### 3.3a Key Design Change: `arrival_time` → `send_time`
+
+In the previous version, TTFT was measured against vLLM's internal `req.arrival_time`, which is set inside `input_processor.process_inputs`. Under high load, the engine event loop may be busy, causing `arrival_time` to be set *after* significant queuing delay has already elapsed. This means `arrival_time` underestimates the actual waiting time experienced by the client.
+
+**The fix**: The workload sender now records a `send_time` (wall-clock epoch in seconds) *before* the HTTP POST and passes it to the server via `vllm_xargs.send_time`. The energy scheduler's `_get_arrival_ms()` method (see §3.9) uses `send_time` as the authoritative arrival time, falling back to `req.arrival_time` only if `send_time` is absent. TTFT measurement in the sender also uses `send_time` as the baseline. This captures the full end-to-end latency including HTTP and engine-queue delays.
+
+**L115–169: `main()`**: Orchestrates the workload replay:
+- Loads all requests from `trace.jsonl`.
+- Dispatches requests respecting arrival times using `asyncio.sleep`.
+- Writes `results.jsonl` with all per-request metrics including `send_time` and `complete_time`.
 
 ---
 
@@ -163,43 +171,38 @@ bash main.sh
 
 **L28: CSV columns**: `timestamp_s, power_w, sm_clock_mhz, utilization_pct`
 
-**L30–35: NVML initialization**: Gets the GPU handle for the specified GPU index.
-
-**L38–52: Main sampling loop**:
+**L30–52: Main sampling loop**:
 - Calls `nvmlDeviceGetPowerInfo()` to get power in milliwatts, converts to watts.
 - Calls `nvmlDeviceGetClockInfo()` for SM clock frequency.
 - Calls `nvmlDeviceGetUtilizationRates()` for GPU utilization percentage.
-- Writes a CSV row with `flush=True` after each sample (ensures data is not lost on crash).
+- Writes a CSV row with `flush=True` after each sample.
 - Sleeps for the configured interval (0.1s by default).
-- Exits when `_stop` flag is set.
 
 ---
 
-### 3.5 `scripts/metrics_collector.py` (126 lines) — Metrics aggregation
+### 3.5 `scripts/metrics_collector.py` (173 lines) — Metrics aggregation
 
 **Purpose**: Reads `results.jsonl` and `power.csv` from a completed experiment, computes summary statistics, and writes `summary.json`.
 
-**L11–17: `trapz()`**: Trapezoidal integration function. Given arrays of power (watts) and time (seconds), computes the total energy in joules as the area under the power-vs-time curve.
+**L10–16: `trapz()`**: Trapezoidal integration function. Given arrays of time (seconds) and power (watts), computes total energy in joules.
 
-**L20–32: `solve_exec_ratio()`**: Reads the iteration log (`iter_custom.log`) from the custom scheduler. Each line is a JSON record with `solve_ms` (time to run the optimisation) and `exec_ms` (time for the actual batch execution on GPU). Returns the mean of `solve_ms / exec_ms` — a measure of solver overhead relative to execution time. Returns 0.0 if the log doesn't exist (baseline case).
+**L19–38: `interpolate_power()`**: Linear interpolation of the power trace at an arbitrary timestamp. Used to compute exact power values at the boundaries of the active window.
 
-**L50–52**: Filters to only completed requests (HTTP status 200, no error).
+**L41–61: `windowed_energy()`**: Computes energy and mean power over a specific time window `[start_ts, end_ts]`:
+- Interpolates power at window boundaries via `interpolate_power()`.
+- Extracts power samples that fall within the window.
+- Integrates energy over this windowed sub-trace via `trapz()`.
 
-**L54–58**: Computes mean TTFT and TPOT across all completed requests.
+This is a significant improvement over the previous approach that integrated over the entire power log duration. The window is defined as `[first_send_time, last_complete_time]` — the active period when requests were actually being processed. This eliminates idle-period power from inflating the energy measurement.
 
-**L60–72**: Computes SLO violations:
-- `mean_ttft_violation_ms`: average of `max(0, actual_ttft - ttft_slo)` — how late TTFT was on average.
-- `mean_tpot_violation_ms`: same for TPOT.
-- `ttft_slo_attainment`: fraction of requests that met their TTFT SLO (zero violation).
-- `tpot_slo_attainment`: same for TPOT.
+**L64–76: `solve_exec_ratio()`**: Reads the iteration log and returns mean of `solve_ms / exec_ms`.
 
-**L77–98**: Loads `power.csv`:
-- Parses timestamp, power, clock, utilization columns.
-- Computes time deltas between consecutive samples.
-- Integrates energy via `trapz()`.
-- Computes mean power draw.
-
-**L102–115**: Writes `summary.json` with all 9 required fields.
+**L79–169: `main()`**:
+- Filters completed requests (HTTP 200, no error).
+- Computes mean TTFT, mean TPOT, SLO violations, and attainment rates.
+- **L127–134**: Extracts `first_send = min(send_time)` and `last_complete = max(complete_time)` across all requests — these define the active window for energy computation.
+- **L136–145**: Calls `windowed_energy()` to compute energy only over the active period.
+- Writes `summary.json` with all metrics.
 
 ---
 
@@ -207,222 +210,240 @@ bash main.sh
 
 **Purpose**: Reads two `summary.json` files (default and custom), prints a side-by-side table, and writes `comparison.csv`.
 
-**L10–19: `METRIC_ORDER`**: Defines the 9 metrics in fixed display order with formatting (decimal places, units).
-
-**L44–48**: Prints a formatted table:
-```
-Metric                    Default        Custom
-─────────────────────────────────────────────────
-mean_ttft_ms              4106.25        22631.79
-...
-```
-
-**L51–56**: Writes `comparison.csv` with columns: `metric, default, custom`.
-
 ---
 
 ### 3.7 `vllm_patches/energy_model.py` (114 lines) — Latency and power models
 
 **Purpose**: Provides the mathematical models for per-request latency and GPU power as functions of frequency. These are used by the scheduler to predict execution time and energy consumption.
 
-**L19–41: `LatencyParams` dataclass**: 9 Route B+ coefficients:
+**`LatencyParams` dataclass**: 9 Route B+ coefficients fitted to A800-SXM4-80GB profiling data:
 - `a_p, b_p, c_p`: prefill latency quadratic model coefficients
 - `w_pf, w_dec`: batch overhead weights for prefill and decode
 - `a_d, b_d`: decode latency coefficients
-- `alpha`: frequency scaling exponent for decode
-- `t_c`: constant communication overhead
+- `alpha`: frequency scaling exponent for decode (≈ 0.974)
+- `t_c`: constant communication overhead (≈ 4.65 ms)
 
-The `from_json()` class method allows overriding defaults from a JSON file.
+**`PowerParams` dataclass**: Cubic power model coefficients `(k3, k2, k1, k0)`. The `power_watts(f)` method evaluates `P(f) = k3·f³ + k2·f² + k1·f + k0`.
 
-**L48–62: `PowerParams` dataclass**: Cubic power model coefficients `(k3, k2, k1, k0)`. The `power_watts(f)` method evaluates `P(f) = k3·f³ + k2·f² + k1·f + k0`.
-
-**L69–76: `per_request_time_ms()`** — Eq. 4 in the paper:
+**`per_request_time_ms()`** — Per-request latency contribution:
 - **Prefill**: `t_q = (a_p · l_q² + b_p · l_q · l_kv + c_p · l_q) / f`
-  - Quadratic in prompt length `l_q`, linear in KV cache length `l_kv`, inversely proportional to frequency.
-- **Decode**: `t_q = (a_d · l_kv + b_d) / f^alpha`
-  - Linear in KV cache length, inversely proportional to `f^alpha`.
+- **Decode**: `t_q = (a_d · l_kv + b_d) / f^α`
 
-**L79–87: `batch_overhead_ms()`** — Eq. 5:
-- `T_ovh = (has_prefill ? w_pf/f : 0) + (has_decode ? w_dec/f^alpha : 0)`
+**`batch_overhead_ms()`** — Mode-dependent batch overhead:
+- `T_ovh = I_p · w_pf/f + I_d · w_dec/f^α`
 
-**L90–100: `batch_time_ms()`** — Total iteration time:
-- `ET_i(B, f) = Σ t_q(n, f) + T_ovh(B, f) + t_c`
-
-**L103–114: `load_latency_params()` / `load_power_params()`**: Return hardcoded A800 defaults, or load from JSON if `VLLM_ENERGY_LATENCY_JSON` / `VLLM_ENERGY_POWER_JSON` env vars are set.
+**`batch_time_ms()`** — Total iteration time:
+- `ET_i(B, f) = Σ_{n∈B} t_q(n, f) + T_ovh(B, f) + t_c`
 
 ---
 
-### 3.8 `vllm_patches/frequency_controller.py` (150 lines) — GPU frequency control
+### 3.8 `vllm_patches/frequency_controller.py` (153 lines) — GPU frequency control
 
 **Purpose**: Provides an abstraction for setting and resetting GPU SM clock frequency and memory clock frequency. Uses `pynvml` as the primary mechanism, falls back to `sudo nvidia-smi` when permissions are insufficient.
 
-**L19–28**: `__init__` — Initializes NVML, gets the GPU device handle, queries all supported SM clock frequencies, queries supported memory clocks, and **attempts to lock memory clock to 1593 MHz** (the profiling baseline). A800-SXM4 does not support memory clock locking, so this is a no-op on this hardware, but the attempt is made explicitly to match profiling conditions.
-
-**L30–33**: `supported_clocks()` — Returns sorted list of supported SM clock frequencies (81 values on A800: 210–1410 MHz, 15 MHz steps).
-
-**L35–57**: `set_frequency(f_mhz)`:
-- **L35–38**: Finds the closest supported SM frequency to the requested value. Skips the call if already at target.
-- **L39–42**: First tries `pynvml.nvmlDeviceSetGpuLockedClocks(self._handle, target, target)`.
-- **L43–57**: Falls back to `sudo nvidia-smi -lgc {target},{target}`.
-
-**L59–81**: `reset()` — Unlocks both SM clock and memory clock, restoring dynamic frequency scaling. NVML first, then `sudo nvidia-smi -rgc / -rmc` fallback.
-
-**L85–88**: `_closest(f_mhu)` — Returns the supported SM frequency closest to the requested value.
-
-**L90–113**: `_query_supported_clocks()` — Queries supported SM clock frequencies:
-- **L91–97**: `pynvml.nvmlDeviceGetSupportedGraphicsClocks(handle, 0)` — the second argument `0` means "all graphics clocks regardless of memory clock."
-- **L99–113**: Falls back to parsing `nvidia-smi --query-supported-clocks=gr` output. Strips `" MHz"` suffix before `int()` conversion.
-
-**L115–122**: `_query_supported_memory_clocks()` — Returns supported memory clocks (A800 typically reports only `[1593]`).
-
-**L124–143**: `_lock_memory_clock()` — Attempts to lock memory clock to 1593 MHz (profiling baseline):
-- **L131**: Tries `pynvml.nvmlDeviceSetMemoryLockedClocks()` first.
-- **L136–140**: Falls back to `sudo nvidia-smi -lmc 1593,1593`.
-- Both methods fail on A800 (hardware doesn't support memory clock locking) — this is expected and non-fatal.
-
-**L146–149**: `get_controller()` — LRU-cached singleton factory. Reads `VLLM_ENERGY_GPU_INDEX` env var.
+- `__init__`: Initializes NVML, queries supported SM clocks, queries memory clocks, attempts to lock memory clock to 1593 MHz (profiling baseline — no-op on A800).
+- `supported_clocks()`: Returns sorted list of supported SM frequencies (81 values on A800: 210–1410 MHz, 15 MHz steps).
+- `set_frequency(f_mhz)`: Finds closest supported frequency, skips if already set, tries pynvml then `sudo nvidia-smi -lgc`.
+- `reset()`: Unlocks SM and memory clocks.
+- `get_controller()`: LRU-cached singleton factory.
 
 ---
 
-### 3.9 `vllm_patches/energy_scheduler.py` (411 lines) — Core energy scheduler
+### 3.9 `vllm_patches/energy_scheduler.py` (963 lines) — Core energy scheduler
 
-**Purpose**: The main scheduling algorithm. Replaces vLLM's default scheduler with an energy-aware one that selects GPU frequency and batch composition per iteration.
+**Purpose**: The main scheduling algorithm. Replaces vLLM's default scheduler with an energy-aware one that jointly selects GPU frequency and batch composition per iteration, with online adaptive SLO-weight updates.
 
-#### Part (a): Pure-Python core (L17–232) — testable without vLLM
+#### Part (a): Mathematical Formulation — Alt-1 Heuristic
 
-**L30–55: `EnergySchedConfig` dataclass**: Holds all scheduler hyperparameters:
-- `beta`: energy-utility trade-off (larger → more energy saving)
-- `w_ttft`, `w_tpot`: weights for TTFT/TPOT in priority calculation
-- `eta_ms`: base per-iteration time budget from env (VLLM_ENERGY_ETA_MS).
-  The actual time budget used is `max(eta_ms, min_r slack_ms)`, where `slack_ms = deadline_ms - wait_ms` over all requests. This ensures the budget never drops below the most urgent request's slack.
-- `Lmax`: max tokens per batch
-- `freq_stride`: stride for frequency candidate subsampling
-- `from_env()`: reads all values from `VLLM_ENERGY_*` environment variables
+The scheduler implements the **Alt-1 Heuristic** — a cheap approximation to the Alt-1 formulation (soft exponential deadline penalty). Instead of the exact τ-breakpoint enumeration (which is `O(|T|·|F|·N log N)`), this heuristic runs in `O(N log N + |F|·|B̂|²)` per solve().
 
-**L58–67: `ReqView` dataclass**: Lightweight request representation used by the solver:
-- `handle`: reference to the actual vLLM request object
-- `is_prefill`: True for waiting requests, False for running (decode) requests
-- `l_q`: number of prompt tokens (prefill) or 1 (decode)
-- `l_kv`: number of already-computed tokens (KV cache length)
-- `wait_ms`: time since request arrival
-- `deadline_ms`: TTFT target (prefill) or TPOT target (decode)
-- `w_n`: priority weight
-- `kv_blocks_needed`: KV cache blocks required
+##### Notation and Conventions
 
-**L70–73: `instant_utility()`** — Eq. 1:
+All time-related arithmetic inside the solver is in **SECONDS**. At the boundary with `energy_model` (which returns ms) and `ReqView` (which carries `deadline_ms` / `wait_ms` for backward compatibility with main.sh configs), there is exactly one `/1000` conversion at ingest and one `×1000` conversion on the `et_pred` returned to the caller.
+
+Key quantities per request `n` at iteration `i`:
+
+| Symbol | Definition | Units |
+|---|---|---|
+| `r_n` | `w_n · w_TTFT` (prefill) or `w_n · w_TPOT` (decode) — baseline reward | dimensionless |
+| `s_n` | `deadline_n − T_{i,n}` — slack (positive = on time, negative = overdue) | seconds |
+| `ℓ_{i,n}` | per-iteration token cost: `num_prompt_tokens` for prefill, `1` for decode | tokens |
+| `T_{i,n}` | time waited since arrival (for prefill) or since last execution (for decode) | seconds |
+| `ET_i(B, f)` | predicted batch execution time at frequency `f` | seconds |
+| `P(f)` | GPU power draw at frequency `f` | watts |
+
+##### Step 1: One-Shot Priority
+
+Each request is scored once:
+
 ```
-u(n) = r_n · exp(-(deadline - wait) / 1000)
+q_n = r_n · min(exp(−s_n), CAP) / ℓ_{i,n}
 ```
-The urgency-based priority: decays exponentially as slack decreases. A request close to its deadline has high utility.
 
-**L76–83: `adjusted_utility()`** — Eq. 3:
+where:
+- `exp(−s_n)` is a smooth urgency proxy:
+  - `s_n` large positive → comfortably before deadline → low urgency → `q_n` small
+  - `s_n ≈ 0` → near deadline → `exp(−s_n) ≈ 1`
+  - `s_n` large negative → deeply overdue → urgency saturates at `CAP`
+- `CAP = 20000.0` — caps the boost of deeply-overdue requests so a single item does not arbitrarily dominate the priority order
+- The `/ℓ_{i,n}` converts `r_n · urgency` into a "value-density per token" — suitable for a token-bounded knapsack greedy
+
+##### Step 2: Density-Greedy Fill
+
+Sort all requests by `q_n` descending. Admit in order while:
+- `cum_tokens + ℓ_n ≤ L_max` (token budget)
+- `|B| < B_max` (batch size limit)
+
+Requests that would exceed `L_max` are **skipped** (not stopped) — smaller items further down the order may still fit. This produces the greedy batch `B̂`.
+
+##### Step 3: Joint (Prefix, Frequency) Enumeration
+
+Define nested prefixes of the greedy batch:
+
 ```
-v(n, f) = u(n) - β · P(f) · t_q(n, f)
+B_j ≜ {first j items of B̂ in admission order},   j = 1, ..., |B̂|
 ```
-Subtracts the energy penalty (power × time, scaled by β) from the instantaneous utility. At high β, requests at low frequency may have negative adjusted utility, causing the solver to prefer lower frequencies or defer the request.
 
-**L86–112: `greedy_knapsack_2d()`** — 2-D knapsack solver:
-- Filters out items with value ≤ 0.
-- Computes utility density: `value / max(token_ratio, time_ratio)`.
-- Sorts by density (highest first).
-- Greedily adds items while both constraints hold: total tokens ≤ Lmax and total time ≤ η.
-- Returns indices of selected items.
+These form a nested chain: `B_1 ⊂ B_2 ⊂ ... ⊂ B_{|B̂|}`.
 
-**L115–232: `FrequencyFirstSolver.solve()`** — The core algorithm:
+Jointly enumerate `(B_j, f) ∈ {B_1, ..., B_{|B̂|}} × F` and pick:
 
-- **L131–132**: Separates requests into running (decode, currently in-progress) and prefill (waiting) categories. Running requests MUST be served to avoid stalling in-flight generations.
+```
+(j*, f*) = argmax_{j,f}  Σ_{n∈B_j} r_n · exp(−[ET_i(B_j, f) − s_n]₊) − β · P(f) · ET_i(B_j, f)
+```
 
-- **L134**: Initializes `best` as `(0.0, highest_freq, [], 0.0)` — the empty batch at highest frequency is the baseline fallback.
+where `[x]₊ = max(x, 0)`.
 
-- **L137–143**: Builds the mask list — which batch compositions to consider:
-  - `"prefill_only"`: only prefill requests (no running requests exist)
-  - `"decode_only"`: only running requests (no waiting requests)
-  - `"mixed"`: both prefill and decode requests
+The objective has two terms:
+1. **Utility**: `Σ r_n · exp(−[ET_i − s_n]₊)` — total reward scaled by a soft deadline penalty. When `ET_i ≤ s_n` (batch completes before the request's deadline), the exponential is `exp(0) = 1` (full reward). When `ET_i > s_n`, the reward decays exponentially with the overshoot.
+2. **Energy cost**: `β · P(f) · ET_i(B_j, f)` — energy consumed in joules, scaled by β. Higher β penalises energy consumption more aggressively.
 
-- **L145–148**: Subsamples frequency candidates using `freq_stride`. With stride=4 on 82 A800 clocks, this evaluates 21 candidates instead of 82.
+**Note**: The `CAP` only applies to the priority `q_n` in Step 2 (for the admission order). The objective in Step 3 uses the **uncapped** exponential form from the original Alt-1 utility.
 
-- **L146–149**: Computes `effective_eta = max(cfg.eta_ms, min_r (deadline_ms - wait_ms))` — dynamic time budget that never drops below the most urgent request's slack.
+**Plan A — Always Commit**: The solver initialises `best_J = −∞` and always picks the argmax `(j*, f*)` regardless of its sign. Rationale: vLLM will execute *something* every iteration anyway (continuous batching), so picking the least-bad `(B_j, f)` strictly dominates falling back to the default scheduler.
 
-- **L151–198**: Main enumeration loop over frequency and mask:
-  - **L152**: Computes power at the candidate frequency.
-  - **L153**: Computes `(v, t_q)` for every request at this frequency.
-  - **L156–158**: Computes batch overhead based on whether prefill/decode are present, then derives `eta_left = effective_eta - T_ovh - t_c`.
-  - **L161–177**: Builds values/times/tokens arrays for the knapsack:
-    - **Mode filtering (L167–170)**: `prefill_only` skips decode requests; `decode_only` skips prefill requests. This was a bug fix — the original code omitted these guards, causing all three modes to evaluate the same request set, making the mode enumeration meaningless.
-    - Requests with negative utility are skipped (the solver would defer them).
-  - **L176–180**: Runs the greedy knapsack solver.
-  - **L184–188**: For `"mixed"` mask, validates the batch actually contains both prefill and decode requests (otherwise it degenerates to a single-type batch, which should have been handled by the other masks).
-  - **L190–195**: Computes the objective `J = Σ v(n, f*) - β · P(f*) · (T_ovh + t_c)` and updates the best solution if this is better.
+##### Incremental Optimisation (Vectorised)
 
-- **L203**: `_, f_star, picked, et_pred = best` — safely unpacks the best tuple as the fallback. This was a bug fix: the original code referenced `f_star`/`picked`/`et_pred` directly without unpacking from `best`, causing a `NameError` on the very first iteration (debug_iter=0), crashing the engine after one request.
+Since `{B_j}` is nested, computing `ET_i(B_j, f)` for all `j` is essentially free:
+- A single `np.cumsum` over per-request workload contributions yields `num_p[j]` and `num_d[j]` for every prefix.
+- Mode indicators `I_p(B_j)`, `I_d(B_j)` are monotone (0→1, never reset), computed by `cumsum(...) > 0`.
+- The full Step 3 vectorises to a `(|F|, |B̂|, |B̂|)` matrix product plus one argmax.
 
-#### Part (b): vLLM integration (L224–398)
+Batch execution time at prefix `j` and frequency `f`:
 
-**L244–411: `make_energy_scheduler_class()`**: Factory function that creates an `EnergyScheduler` class subclassing vLLM's `Scheduler`.
+```
+ET_i(B_j, f) = (num_p[j] / f + num_d[j] / f^α + t_c) / 1000
+```
 
-**L228–270: `__init__`**:
+where:
+- `num_p[j] = Σ_{n∈B_j, prefill} (a_p·l_q² + b_p·l_q·l_kv + c_p·l_q) + I_p · w_pf`
+- `num_d[j] = Σ_{n∈B_j, decode} (a_d·l_kv + b_d) + I_d · w_dec`
+
+##### Two Heuristic Modes (controlled by `SOLUTION_MODE`)
+
+**Heuristic 2 (H2, `solution_mode=1`)**: `_solve_h2()`
+- Frequency-**independent** priority: computes `q_n` once using `exp(−s_n)`, applies the same admission order for all frequencies.
+- Steps: one greedy fill → joint `(B_j, f)` enumeration over prefixes of that single `B̂`.
+- Complexity: `O(N log N + |F|·|B̂|²)`
+
+**Heuristic 3 (H3, `solution_mode=2`)**: `_solve_h3()` — **current default**
+- Frequency-**dependent** priority: the priority score incorporates the per-request energy cost at each candidate frequency:
+
+```
+q_n(f) = [r_n · min(exp(−s_n), CAP) − β · P(f) · t_n(f)] / ℓ_n
+```
+
+  where `t_n(f)` is the per-request time contribution at frequency `f`.
+
+- For each frequency `f`, computes a separate admission order, a separate greedy batch `B̂(f)`, and a separate prefix search. Picks the global argmax `(j*, f*)` across all frequencies.
+- This is more expensive but produces better solutions when energy cost varies significantly across frequencies.
+- **Exp decomposition** optimisation: `exp(−max(ET_j − s_n, 0))` is decomposed as `min(exp(s_n) · exp(−ET_j), 1)`, avoiding recomputation of `exp(s_n)` across prefixes.
+- Complexity: `O(|F| · (N log N + |B̂|²))`
+
+#### Part (b): Online Adaptive Weight Update ("Adaptive Control")
+
+The weights `w_TTFT` and `w_TPOT` are **not fixed** — they are updated online based on observed SLO performance. This is implemented in `_online_update_weights()`, which runs at the beginning of every `schedule()` call (before the solver), so the fresh weights are picked up immediately.
+
+**TTFT update** — fires upon observing the first output token of request `n`:
+```
+w_TTFT ← [w_TTFT + η_TTFT · w_n · (TTFT_obs / TTFT_slo − 1)]⁺
+```
+
+**TPOT update** — fires upon completion of request `n` (request leaves the scheduler's visibility):
+```
+w_TPOT ← [w_TPOT + η_TPOT · w_n · (avg_TPOT_obs / TPOT_slo − 1)]⁺
+```
+
+where:
+- `[x]⁺ = max(0, x)` (non-negativity projection)
+- `η_TTFT = 1.0`, `η_TPOT = 1.0` (hardcoded learning rates)
+- `TTFT_obs = now_ms − arrival_ms` (observed TTFT for request `n`)
+- `avg_TPOT_obs = (now_ms − first_tok_ms) / (num_output_tokens − 1)`
+- `TTFT_slo`, `TPOT_slo` are per-request SLO targets from `extra_args`
+- Multiple events in the same iteration are applied **serially** (each subsequent update sees the already-updated weight)
+
+**Intuition**: When TTFT is consistently violated (`TTFT_obs/TTFT_slo > 1`), `w_TTFT` increases, making the solver prioritise prefill requests more aggressively. When TTFT SLOs are met (`ratio < 1`), `w_TTFT` decreases, allowing the solver to shift priority toward energy savings or decode throughput.
+
+Per-request state for the online update is tracked in `self._req_state` (keyed by `request_id`), with fields: `arrival_ms`, `w_n`, `ttft_slo_ms`, `tpot_slo_ms`, `ttft_fired`, `first_tok_ms`, `last_num_out`.
+
+#### Part (c): `send_time` as Authoritative Arrival Time
+
+The method `_get_arrival_ms(req, now_ms)` determines the arrival time for each request with the following priority:
+
+1. **`send_time`** from `extra_args` (client-side wall-clock epoch) — preferred
+2. `req.arrival_time` (vLLM internal timestamp) — fallback
+3. `now_ms` — last resort
+
+This is crucial because vLLM's `req.arrival_time` is set inside `input_processor.process_inputs`, which can be delayed when the engine event loop is busy under high load. The client-side `send_time` captures the full queuing delay.
+
+#### Part (d): KV Cache Eviction (3 modes)
+
+`_kv_evict()` ensures the chosen batch fits in the KV cache:
+
+- **Mode 1 (conservative)**: Each request's full KV size in blocks is counted against free blocks. If insufficient, the request with lowest adjusted utility is removed from the batch. Repeats until the batch fits.
+- **Mode 2 (incremental)**: Only new blocks needed this iteration are counted (matches vLLM's `allocate_slots` logic). Otherwise same shrink policy as mode 1.
+- **Mode 3 (preempt)**: Preempts non-chosen running requests to free their KV blocks (resets them to prefill state). Falls back to mode 1/2 shrinking if still insufficient.
+
+#### Part (e): vLLM Integration
+
+**`make_energy_scheduler_class()`**: Factory function that creates an `EnergyScheduler` class subclassing vLLM's `Scheduler`.
+
+**`__init__`**:
 - Loads config from environment variables.
 - Loads latency and power model parameters.
 - Creates the frequency controller singleton.
-- Builds the list of frequency candidates (from controller or defaults).
-- Creates the solver instance.
+- Builds frequency candidates list (from controller, appending 1410 if absent).
+- Creates the `Alt1HeuristicSolver` instance.
 - Sets `Lmax` from vLLM's `scheduler_config.max_num_batched_tokens`.
-- Opens the iteration log file for append.
+- Opens the iteration log file.
+- Initialises `_req_state` dict for the online weight update.
 
-**L272–317: `_build_request_views()`**: Converts vLLM's internal request objects into `ReqView` dataclasses:
-- **L274–295**: Iterates `self.waiting` (prefill requests). Extracts TTFT/TPOT/w_n from `sampling_params.extra_args`. Computes `wait_ms = now - arrival_time`. Computes `l_q` from `num_prompt_tokens`.
-- **L296–317**: Iterates `self.running` (decode requests). Sets `l_q = 1` (one token per decode step). Computes `l_kv` from `num_computed_tokens`.
+**`_build_request_views(now_ms)`**: Converts vLLM's internal request objects into `ReqView` dataclasses:
+- **Waiting (prefill)**: `wait_ms = now_ms − arrival_ms` (using `_get_arrival_ms`), `l_q = num_prompt_tokens`, `l_kv = 0`, `deadline_ms = ttft_ms`.
+- **Running (decode)**: `wait_ms = now_ms − last_exec_ms` (time since this request was last executed), `l_q = 1`, `l_kv = num_computed_tokens`, `deadline_ms = tpot_ms`. Falls back to `arrival_ms` if no `last_exec_ms` is recorded.
 
-**L319–345: `_kv_evict()`**: Handles KV cache capacity constraints:
-- If the total KV blocks needed by chosen requests exceeds available free blocks, evicts the request with the lowest adjusted utility.
-- Repeats until the batch fits or only one request remains.
+**`_materialise_batch(chosen)`**: Temporarily hides unchosen requests from `self.waiting`/`self.running`, calls `super().schedule()`, then restores them.
 
-**L347–366: `_materialise_batch()`**: Executes the chosen batch:
-- Identifies which requests are chosen vs unchosen.
-- Temporarily removes unchosen requests from `self.waiting` and `self.running` using vLLM's `remove_requests()`/`remove()` methods.
-- Calls `super().schedule()` (vLLM's default scheduler) to actually execute the chosen batch.
-- Restores unchosen waiting requests to the queue.
-
-**L368–396: `schedule()`**: Main entry point, called by vLLM on every scheduling iteration:
-- **L369–373**: Measures `exec_ms` — the wall-clock gap since the last `schedule()` exit, which approximates the GPU execution time of the previous batch.
-- **L374–375**: Builds request views from current waiting/running queues.
-- **L376–379**: Calls the solver, sets GPU frequency via `set_frequency()`. If solver returns empty batch, falls back to `super().schedule()`.
-- **L380–383**: Evicts KV cache if needed and materializes the batch.
-- **L384–396**: Logs iteration data (solve time, batch size, frequency, predicted time) for later analysis.
-- **L400–408**: Prints a summary every `log_every_n` iterations.
+**`schedule()`**: Main entry point, called by vLLM on every scheduling iteration:
+1. Measures `exec_ms` — wall-clock gap since last `schedule()` exit.
+2. Runs `_online_update_weights(now_ms)` — updates `w_TTFT`/`w_TPOT`.
+3. Builds request views.
+4. Calls `solver.solve()`, sets GPU frequency.
+5. Runs KV eviction, materialises batch.
+6. Records `last_exec[req_id] = now_ms` for all chosen requests.
+7. Logs iteration data (solve_ms, batch_size, n_prefill, n_decode, n_preempted, f_star, et_pred_ms, w_ttft, w_tpot, ttft_updates, tpot_updates).
 
 ---
 
 ### 3.10 `vllm_patches/apply_patch.sh` (36 lines) — Patch installer
 
-**Purpose**: Copies the energy scheduler Python files into the vLLM source tree and appends a sentinel-guarded hook to `vllm/__init__.py`.
-
-**L6–10**: Copies 4 files into `vllm/energy_sched/`:
-- `energy_model.py` → latency and power models
-- `frequency_controller.py` → GPU frequency control
-- `energy_scheduler.py` → the scheduler itself
-- `__init__.py` → package marker
-
-**L13–22**: Appends the `ENERGY_SCHED_HOOK` to `vllm/__init__.py`. The hook is guarded by:
-- A sentinel comment `# <<< ENERGY_SCHED_HOOK >>>` so the script can detect if it's already been applied (idempotent).
-- An environment variable check `VLLM_ENERGY_SCHEDULER=1` so the hook is a no-op unless explicitly enabled.
-- A try/except so any import failure is logged but doesn't crash vLLM.
-
----
+Copies 4 files into `vllm/energy_sched/` and appends a sentinel-guarded hook to `vllm/__init__.py`.
 
 ### 3.11 `vllm_patches/unapply_patch.sh` (27 lines) — Patch remover
 
-**Purpose**: Removes the energy scheduler from vLLM. Used for cleanup or reverting to a clean vLLM state.
-
-**L6**: Removes the `vllm/energy_sched/` directory.
-
-**L9–18**: Uses a Python regex to remove everything from the `ENERGY_SCHED_HOOK` marker to EOF in `vllm/__init__.py`, restoring the file to its original state.
-
----
+Removes the `vllm/energy_sched/` directory and strips the hook from `vllm/__init__.py`.
 
 ### 3.12 `vllm_patches/__init__.py` (1 line) — Package marker
-
-**Purpose**: Empty `__init__.py` file that makes `vllm/energy_sched/` a Python package, enabling `from vllm.energy_sched.energy_scheduler import ...` imports.
 
 ---
 
@@ -430,9 +451,7 @@ Subtracts the energy penalty (power × time, scaled by β) from the instantaneou
 
 **File**: `/home/ubuntu/lqs/vllm/vllm/__init__.py`
 
-**Line**: 103 (appended block at end of file)
-
-**Snippet** (between `# <<< ENERGY_SCHED_HOOK >>>` marker and EOF):
+**Snippet** (appended, between `# <<< ENERGY_SCHED_HOOK >>>` marker and EOF):
 ```python
 # <<< ENERGY_SCHED_HOOK >>>
 import os as _ENERGY_os
@@ -446,41 +465,40 @@ if _ENERGY_os.environ.get("VLLM_ENERGY_SCHEDULER", "0") == "1":
         print(f"[energy_sched] failed to install: {_e}", file=_s.stderr, flush=True)
 ```
 
-**How the hook works**: When vLLM is imported (`import vllm`), `__init__.py` runs. If `VLLM_ENERGY_SCHEDULER=1` is set in the environment, it imports `make_energy_scheduler_class()` and monkey-patches `vllm.v1.core.sched.scheduler.Scheduler` to be the energy-aware subclass. This is a non-invasive patch — no existing vLLM files are modified, and the patch is a pure no-op unless the env var is set.
-
-**New directory**: `/home/ubuntu/lqs/vllm/vllm/energy_sched/` — contains `__init__.py`, `energy_model.py`, `energy_scheduler.py`, `frequency_controller.py`.
+**How the hook works**: When vLLM is imported, if `VLLM_ENERGY_SCHEDULER=1` is set, it monkey-patches `vllm.v1.core.sched.scheduler.Scheduler` with the energy-aware subclass. Pure no-op unless the env var is set.
 
 ## 5. Dataset Provenance
 
 - **Repo**: `RyokoAI/ShareGPT52K` on Hugging Face
-- **Auto-download**: `prepare_dataset.py` automatically downloads the dataset via `huggingface_hub` if the directory is missing, or re-downloads if Git LFS pointers are detected (file size < 200 bytes, content starts with `version`). No manual `snapshot_download` command is needed.
-- **Trace**: 400 requests, first human message per conversation, prompt length 64–8000 chars
-- **SLO parameters**: TTFT μ=1000ms σ=200ms, TPOT μ=50ms σ=40ms (truncated normal)
-- **Arrival rate**: 10 req/s (uniform)
+- **Auto-download**: `prepare_dataset.py` automatically downloads the dataset via `huggingface_hub` if the directory is missing, or re-downloads if Git LFS pointers are detected.
+- **Trace**: 400 requests, first human message per conversation, prompt length 512–8000 chars
+- **SLO parameters**: TTFT μ=4000ms σ=800ms, TPOT μ=100ms σ=40ms (truncated normal)
+- **Arrival rate**: 4 req/s (uniform)
 
-## 6. Results (latest run — after bug fixes)
+## 6. Results (latest run)
 
-Parameters: `BETA=0.01, W_TTFT=2000, W_TPOT=50, ETA_MS=200, MAX_NUM_SEQS=128, NUM_REQUESTS=400, RATE_QPS=10, FREQ_STRIDE=4`.
+Parameters: `BETA=0.0, W_TTFT=100000.0 (initial), W_TPOT=1.0 (initial), SOLUTION_MODE=2 (H3), EVICTION_MODE=1, MAX_NUM_SEQS=64, NUM_REQUESTS=400, RATE_QPS=4, FREQ_STRIDE=3`.
 
 | Metric | Default | Custom |
 |--------|---------|--------|
-| num_completed | — | 400 |
-| num_failed | — | 0 |
-| mean_ttft_ms | — | 27632.11 |
-| mean_tpot_ms | — | 58.84 |
-| mean_ttft_violation_ms | — | 26868.73 |
-| mean_tpot_violation_ms | — | 13.96 |
-| ttft_slo_attainment | — | 0.27 |
-| tpot_slo_attainment | — | 0.3125 |
-| mean_power_w | — | 182.35 |
-| total_energy_j | — | 27378.72 |
-| mean_solve_exec_ratio | — | 0.1767 |
+| num_completed | 400 | 400 |
+| num_failed | 0 | 0 |
+| mean_ttft_ms | 12210.99 | 9216.16 |
+| mean_tpot_ms | 40.23 | 60.35 |
+| mean_ttft_violation_ms | 9194.52 | 6854.82 |
+| mean_tpot_violation_ms | 0.84 | 1.02 |
+| ttft_slo_attainment | 0.3125 | 0.4475 |
+| tpot_slo_attainment | 0.9325 | 0.93 |
+| mean_power_w | 349.07 | 346.51 |
+| total_energy_j | 53182.37 | 53355.91 |
+| mean_solve_exec_ratio | 0.0 | 0.012387 |
 
 **Notes on results**:
-- All 400 requests completed in custom mode (the previous run with 399 failures was caused by a `NameError` in the debug code, now fixed).
-- Mean power is 182.35W vs typical ~340W default, reflecting the solver's tendency to pick lower GPU frequencies (930–990 MHz).
-- `mean_solve_exec_ratio = 0.177` means the solver takes ~18% of the batch execution time — acceptable overhead for per-iteration use.
-- TTFT is significantly higher than default because the solver defers prefill requests whose adjusted utility is low when β·P(f)·t_q dominates.
+- All 400 requests completed in both modes.
+- **TTFT improvement**: Custom scheduler reduces mean TTFT by 24.5% (12211ms → 9216ms) and TTFT SLO attainment improves from 31.25% to 44.75%. The online adaptive weight update drives `w_TTFT` higher when violations are detected, making the solver prioritise prefill requests more aggressively.
+- **TPOT trade-off**: Mean TPOT increases from 40.23ms to 60.35ms (still within SLO for most requests — attainment drops only from 93.25% to 93.0%).
+- **Energy**: With `β=0.0`, the energy term is inactive — the solver optimises purely for SLO attainment. Power and energy are similar between default and custom (349W vs 347W, 53.2kJ vs 53.4kJ). To activate energy saving, increase `β` (e.g., `β=0.001`).
+- **Solver overhead**: `mean_solve_exec_ratio = 0.012` means the solver takes ~1.2% of batch execution time — negligible overhead.
 
 ## 7. How to Reproduce
 
@@ -495,4 +513,4 @@ bash main.sh
 cat results/demo/comparison.csv
 ```
 
-To change experiment parameters, edit the USER KNOBS block at the top of `main.sh`. To change trace generation parameters (or force re-download of the dataset), edit the USER KNOBS block at the top of `scripts/prepare_dataset.py`. The dataset is automatically verified and downloaded if Git LFS pointer files are detected.
+To change experiment parameters, edit the USER KNOBS block at the top of `main.sh`. To change trace generation parameters (or force re-download of the dataset), edit the USER KNOBS block at the top of `scripts/prepare_dataset.py` and delete `trace.jsonl` to regenerate.

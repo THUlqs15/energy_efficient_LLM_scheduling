@@ -52,7 +52,10 @@ class FrequencyController:
                     return True
             except Exception:
                 pass
-            print(f"[freq_ctl] set_frequency({target}) failed — skipping freq lock")
+            import sys
+            print(f"[freq_ctl] WARNING: set_frequency({target}) failed via both pynvml and nvidia-smi. "
+                  f"GPU clock NOT locked. Run with root or grant CAP_SYS_NICE.",
+                  file=sys.stderr, flush=True)
             self._last_f = target
             return False
 

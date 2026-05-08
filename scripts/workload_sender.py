@@ -62,6 +62,7 @@ async def send_one(
                 "ttft_ms": record["ttft_ms"],
                 "tpot_ms": record["tpot_ms"],
                 "w_n": record.get("w_n", 1.0),
+                "send_time": rr.send_time,
             },
         }
         try:

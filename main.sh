@@ -40,7 +40,7 @@ GPU_INDEX=0
 MAX_MODEL_LEN=8192
 # Maximum sequence length (input + output tokens).
 
-MAX_NUM_SEQS=128
+MAX_NUM_SEQS=64
 # Maximum number of concurrent requests in the engine.
 
 GPU_MEM_UTIL=0.9
@@ -51,7 +51,7 @@ NUM_REQUESTS=400
 # Number of requests to send in this run.
 # Must not exceed the number of lines in trace.jsonl.
 
-RATE_QPS=10
+RATE_QPS=4
 # Request arrival rate (requests per second).
 # Determines how fast the workload is replayed from trace.jsonl.
 
@@ -65,17 +65,17 @@ TRACE_SEED=42
 # Random seed for trace generation (used by prepare_dataset.py).
 
 # ----- Scheduler hyper-parameters (custom mode only) --------------------------
-BETA=0.1
+BETA=0.0
 # Energy-utility trade-off parameter. Larger β → solver prioritises energy
 # saving over SLO attainment, tends to pick lower GPU frequencies.
 # The energy term is β × Watts × seconds (Joules).
 # Typical range: 0.001 (mild energy saving) to 1.0 (aggressive energy saving).
 
-W_TTFT=10.0
+W_TTFT=100000.0
 # Weight for TTFT in the per-request priority calculation.
 # Higher w_TTFT makes the solver more sensitive to TTFT deadlines.
 
-W_TPOT=10.0
+W_TPOT=1.0
 # Weight for TPOT in the per-request priority calculation.
 # Higher w_TPOT makes the solver more sensitive to TPOT deadlines.
 
@@ -87,11 +87,22 @@ ETA_MS=200
 LMAX=0
 # Maximum tokens per batch. 0 means inherit vLLM's max_num_batched_tokens.
 
-FREQ_STRIDE=4
+FREQ_STRIDE=3
 # Stride for frequency candidate subsampling. A800 has 82 supported SM clocks;
 # with stride=4, the solver evaluates every 4th clock (ceil(82/4) = 21 candidates).
 # Larger = faster solving but coarser frequency search.
 # Typical range: 1 (exhaustive) to 8 (very fast).
+
+EVICTION_MODE=1
+# KV cache eviction strategy:
+#   1 = conservative (full KV size per request, shrink chosen batch)
+#   2 = incremental (new blocks only, shrink chosen batch, matches vLLM allocate_slots)
+#   3 = preempt non-chosen running requests (free their KV, reset to prefill)
+
+SOLUTION_MODE=2
+# Solver heuristic:
+#   1 = Heuristic 2 (freq-independent priority, single admission, joint prefix×freq)
+#   2 = Heuristic 3 (freq-dependent priority, per-frequency admission and prefix)
 
 # ----- Power logging ----------------------------------------------------------
 POWER_INTERVAL_S=0.1
@@ -154,6 +165,8 @@ run_experiment() {
             VLLM_ENERGY_W_TPOT=$W_TPOT
             VLLM_ENERGY_LMAX=$LMAX
             VLLM_ENERGY_FREQ_STRIDE=$FREQ_STRIDE
+            VLLM_ENERGY_EVICTION_MODE=$EVICTION_MODE
+            VLLM_ENERGY_SOLUTION_MODE=$SOLUTION_MODE
             VLLM_ENERGY_ETA_MS=$ETA_MS
             VLLM_ENERGY_GPU_INDEX=0
             VLLM_ENERGY_ITER_LOG=${tag_dir}/iter_custom.log
@@ -162,7 +175,7 @@ run_experiment() {
 
     # Clean old outputs
     rm -f "${tag_dir}/power_${label}.csv" "${tag_dir}/results_${label}.jsonl" \
-          "${tag_dir}/summary_${label}.json"
+          "${tag_dir}/summary_${label}.json" "${tag_dir}/iter_${label}.log"
 
     # Launch vLLM server
     echo "[main] Launching vLLM server (port=$PORT, mode=${label}) ..."
@@ -178,6 +191,7 @@ run_experiment() {
         --no-async-scheduling \
         --no-enable-chunked-prefill \
         --no-enable-prefix-caching \
+        --enable-logging-iteration-details \
         > "${tag_dir}/server_${label}.log" 2>&1 &
     local server_pid=$!
 

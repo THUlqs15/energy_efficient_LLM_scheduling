@@ -23,19 +23,19 @@ OUTPUT = "trace.jsonl"
 NUM_REQUESTS = 400
 # Number of requests to sample into the trace.
 
-RATE_QPS = 10
+RATE_QPS = 4
 # Arrival rate in requests/second. Record i arrives at time i / RATE_QPS.
 
-TTFT_MEAN_MS = 1000.0
+TTFT_MEAN_MS = 4000.0
 # Mean TTFT SLO requirement (ms). Sampled from a truncated normal distribution.
 
-TTFT_STD_MS = 200.0
+TTFT_STD_MS = 800.0
 # Std dev of the TTFT SLO requirement (ms).
 
-TPOT_MEAN_MS = 50.0
+TPOT_MEAN_MS = 100.0
 # Mean TPOT SLO requirement (ms).
 
-TPOT_STD_MS = 20.0
+TPOT_STD_MS = 40.0
 # Std dev of the TPOT SLO requirement (ms).
 
 MIN_OUTPUT_TOKENS = 64
@@ -44,7 +44,7 @@ MIN_OUTPUT_TOKENS = 64
 MAX_OUTPUT_TOKENS = 1024
 # Maximum number of output tokens per request (uniformly sampled).
 
-MIN_PROMPT_CHARS = 64
+MIN_PROMPT_CHARS = 512
 # Minimum prompt length in characters (filter out very short prompts).
 
 MAX_PROMPT_CHARS = 8000
