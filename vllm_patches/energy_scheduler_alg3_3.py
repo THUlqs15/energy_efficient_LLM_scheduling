@@ -83,7 +83,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
-import math
+
 import numpy as np
 
 
@@ -103,15 +103,15 @@ from .frequency_controller import get_controller
 @dataclass
 class EnergySchedConfig:
     beta: float = 1.0
-    w_ttft: float = 10.0          # MUTABLE — initial value from env, drifts online
+    w_ttft: float = 1.0          # MUTABLE — initial value from env, drifts online
     w_tpot: float = 1.0          # MUTABLE — initial value from env, drifts online
     # Hardcoded learning rates for the SLO-weight online update (Sec.
     # "Adaptive Control"):
     #     w_TTFT ← [w_TTFT + eta_ttft · w_n · (TTFT_obs/TTFT_slo − 1)]^+
     #     w_TPOT ← [w_TPOT + eta_tpot · w_n · (avg_TPOT_obs/TPOT_slo − 1)]^+
     # Not exposed through env on purpose — main.sh need not change.
-    eta_ttft: float = 1.0
-    eta_tpot: float = 1.0
+    eta_ttft: float = 0.1
+    eta_tpot: float = 0.1
     eta_ms: float = 1e9          # accepted from env for backward compat; UNUSED
     Lmax: int = 0
     max_batch_size: int = 0      # 0 → inherit from vLLM scheduler_config.max_num_seqs
@@ -120,8 +120,6 @@ class EnergySchedConfig:
     default_tpot_ms: float = 200.0
     freq_candidates: Optional[List[int]] = None
     freq_stride: int = 1
-    eviction_mode: int = 1   # 1=conservative, 2=incremental, 3=preempt non-chosen running reqs
-    solution_mode: int = 1   # 1=H2 (freq-indep priority), 2=H3 (freq-dep priority)
     log_every_n: int = 50
     iter_log_path: Optional[str] = None
 
@@ -135,8 +133,6 @@ class EnergySchedConfig:
             Lmax=int(os.environ.get("VLLM_ENERGY_LMAX", "0")),
             max_batch_size=int(os.environ.get("VLLM_ENERGY_MAX_BATCH_SIZE", "0")),
             freq_stride=int(os.environ.get("VLLM_ENERGY_FREQ_STRIDE", "1")),
-            eviction_mode=int(os.environ.get("VLLM_ENERGY_EVICTION_MODE", "1")),
-            solution_mode=int(os.environ.get("VLLM_ENERGY_SOLUTION_MODE", "1")),
             iter_log_path=os.environ.get("VLLM_ENERGY_ITER_LOG"),
         )
 
@@ -150,8 +146,7 @@ class ReqView:
     wait_ms: float        # input convention: ms
     deadline_ms: float    # input convention: ms (TTFT for prefill, TPOT for decode)
     w_n: float
-    kv_blocks_needed: int = 0       # full KV size in blocks (mode 1)
-    kv_blocks_incremental: int = 0  # new blocks needed this iter (mode 2)
+    kv_blocks_needed: int = 0
 
 
 # --- helper: baseline reward r_n -------------------------------------------
@@ -195,17 +190,6 @@ class Alt1HeuristicSolver:
         self.freq_candidates = sorted(freq_candidates)
 
     def solve(
-        self,
-        reqs: List[ReqView],
-        Lmax: int,
-        Bmax: int,
-        debug_iter: int = -1,
-    ) -> Tuple[float, list, float]:
-        if self.cfg.solution_mode == 2:
-            return self._solve_h3(reqs, Lmax, Bmax, debug_iter)
-        return self._solve_h2(reqs, Lmax, Bmax, debug_iter)
-
-    def _solve_h2(
         self,
         reqs: List[ReqView],
         Lmax: int,
@@ -389,169 +373,6 @@ class Alt1HeuristicSolver:
         # Convert ET back to ms for compatibility with the iter_log schema.
         return float(best_f), [reqs[i] for i in chosen_local], best_et_s * 1000.0
 
-    # === Heuristic 3: freq-dependent priority, per-frequency admission ======
-
-    def _solve_h3(
-        self,
-        reqs: List[ReqView],
-        Lmax: int,
-        Bmax: int,
-        debug_iter: int = -1,
-    ) -> Tuple[float, list, float]:
-        default_f = self.freq_candidates[-1] if self.freq_candidates else 1410
-        if not reqs:
-            return float(default_f), [], 0.0
-
-        N = len(reqs)
-        cfg = self.cfg
-        lat = self.latency
-        beta = cfg.beta
-        cap = float(self.EXP_CAP)
-
-        # ---- Vectorise per-request quantities (all time in s) ---------------
-        is_pf = np.fromiter((r.is_prefill for r in reqs), dtype=bool, count=N)
-        l_q = np.fromiter((r.l_q for r in reqs), dtype=np.float64, count=N)
-        l_kv = np.fromiter((r.l_kv for r in reqs), dtype=np.float64, count=N)
-        w_n = np.fromiter((r.w_n for r in reqs), dtype=np.float64, count=N)
-        deadline_s = np.fromiter(
-            (r.deadline_ms / 1000.0 for r in reqs), dtype=np.float64, count=N
-        )
-        wait_s = np.fromiter(
-            (r.wait_ms / 1000.0 for r in reqs), dtype=np.float64, count=N
-        )
-        tok_arr = np.fromiter((r.l_q for r in reqs), dtype=np.int64, count=N)
-
-        r_n_vec = w_n * np.where(is_pf, cfg.w_ttft, cfg.w_tpot)
-        s_n_s = deadline_s - wait_s
-        urgency = np.minimum(np.exp(-s_n_s), cap)
-        ell_safe = np.maximum(tok_arr.astype(np.float64), 1.0)
-
-        wp_contrib = np.where(
-            is_pf, lat.a_p * l_q * l_q + lat.b_p * l_q * l_kv + lat.c_p * l_q, 0.0
-        )
-        wd_contrib = np.where(is_pf, 0.0, lat.a_d * l_kv + lat.b_d)
-
-        B_eff = int(Bmax) if Bmax > 0 else N
-
-        # Frequency candidates (subsampled by stride).
-        stride = cfg.freq_stride
-        freqs = self.freq_candidates[::stride]
-        if not freqs:
-            freqs = self.freq_candidates
-
-        # ==== Batch vectorisation: Step 1 + Sort for ALL frequencies ========
-        f_arr = np.asarray(freqs, dtype=np.float64)            # (F,)
-        F = f_arr.size
-        f_alpha_arr = f_arr ** lat.alpha                        # (F,)
-        P_f_arr = np.array(
-            [self.power.power_watts(float(f)) for f in freqs], dtype=np.float64
-        )                                                        # (F,)
-        RU = r_n_vec * urgency                                  # (N,)
-        # wp_contrib=0 for decode, wd_contrib=0 for prefill → sum is correct
-        t_nf_all = (
-            wp_contrib[None, :] / f_arr[:, None]
-            + wd_contrib[None, :] / f_alpha_arr[:, None]
-        ) / 1000.0                                               # (F, N)
-        q_all = (
-            RU[None, :] - beta * P_f_arr[:, None] * t_nf_all
-        ) / ell_safe[None, :]                                    # (F, N)
-        orders_all = np.argsort(-q_all, axis=1, kind="stable")   # (F, N)
-
-        # ==== Precompute exp(s_n) for exp-decomposition in Step 3 ===========
-        exp_s_all = np.exp(s_n_s)                               # (N,)
-
-        # ---- Frequency loop (Steps 2–3 only) -------------------------------
-        global_best_J = -np.inf
-        global_best_f = float(default_f)
-        global_best_chosen: List[int] = []
-        global_best_et_s = 0.0
-
-        for fi in range(F):
-            f_float = float(f_arr[fi])
-            f_alpha = float(f_alpha_arr[fi])
-            P_f = float(P_f_arr[fi])
-            order_fi = orders_all[fi]                            # (N,)
-
-            # -- Step 2: greedy admission (fast-path via cumsum) -------------
-            tok_sorted = tok_arr[order_fi]                       # (N,)
-            B_try = min(B_eff, N)
-            cum_tok_b = np.cumsum(tok_sorted[:B_try])
-            if cum_tok_b[B_try - 1] <= Lmax:
-                picked_local = order_fi[:B_try].tolist()
-            else:
-                # Fallback: sequential scan with skip semantics
-                order_list = order_fi.tolist()
-                tok_list = tok_sorted.tolist()
-                picked_local = []
-                used_tok = 0
-                for i in range(N):
-                    if len(picked_local) >= B_eff:
-                        break
-                    tok_n = tok_list[i]
-                    if used_tok + tok_n > Lmax:
-                        continue
-                    picked_local.append(order_list[i])
-                    used_tok += tok_n
-
-            if not picked_local:
-                continue
-
-            # -- Step 3: prefix maximization at fixed f -----------------------
-            K = len(picked_local)
-            picked_idx = np.asarray(picked_local, dtype=np.int64)
-            is_pf_picked = is_pf[picked_idx]
-
-            dp = wp_contrib[picked_idx].astype(np.float64)
-            dd = wd_contrib[picked_idx].astype(np.float64)
-            cum_dp = np.cumsum(dp)
-            cum_dd = np.cumsum(dd)
-            cum_has_pf = (np.cumsum(is_pf_picked.astype(np.int64)) > 0).astype(np.float64)
-            cum_has_dc = (np.cumsum((~is_pf_picked).astype(np.int64)) > 0).astype(np.float64)
-
-            num_p_vec = cum_dp + lat.w_pf * cum_has_pf
-            num_d_vec = cum_dd + lat.w_dec * cum_has_dc
-
-            ET_s = (num_p_vec / f_float + num_d_vec / f_alpha + lat.t_c) / 1000.0
-
-            r_picked = r_n_vec[picked_idx]
-
-            # Exp decomposition: exp(-max(ET_j - s_n, 0)) = min(exp(s_n)*exp(-ET_j), 1)
-            exp_s = exp_s_all[picked_idx]                        # (K,)
-            exp_neg_ET = np.exp(-ET_s)                           # (K,)
-            raw = exp_neg_ET[:, None] * exp_s[None, :]           # (K, K)
-            u_mat = r_picked[None, :] * np.minimum(raw, 1.0)    # (K, K)
-            tri = np.tri(K, K, dtype=np.float64)
-            sum_u = (u_mat * tri).sum(axis=1)                    # (K,)
-
-            J_vec = sum_u - beta * P_f * ET_s                    # (K,)
-            best_jidx = int(np.argmax(J_vec))
-            best_J_f = float(J_vec[best_jidx])
-
-            if best_J_f > global_best_J:
-                global_best_J = best_J_f
-                global_best_f = f_float
-                global_best_chosen = picked_local[:best_jidx + 1]
-                global_best_et_s = float(ET_s[best_jidx])
-
-        if not global_best_chosen:
-            return float(default_f), [], 0.0
-
-        if debug_iter >= 0 and debug_iter % 10 == 0:
-            import sys
-            n_p = int(is_pf.sum())
-            n_d = N - n_p
-            n_p_ch = sum(1 for i in global_best_chosen if reqs[i].is_prefill)
-            n_d_ch = len(global_best_chosen) - n_p_ch
-            print(
-                f"[dbg-h3] iter={debug_iter} all={N}(p={n_p}d={n_d}) "
-                f"chosen=B_{len(global_best_chosen)}(p={n_p_ch}d={n_d_ch}) "
-                f"f={global_best_f:.0f} J*={global_best_J:.3f} "
-                f"ET={global_best_et_s*1000.0:.2f}ms "
-                f"B_max={B_eff} CAP={self.EXP_CAP}",
-                file=sys.stderr, flush=True)
-
-        return float(global_best_f), [reqs[i] for i in global_best_chosen], global_best_et_s * 1000.0
-
 
 # Alias kept so external code that imports `FrequencyFirstSolver` still works
 FrequencyFirstSolver = Alt1HeuristicSolver
@@ -581,9 +402,6 @@ def make_energy_scheduler_class():
                 or self._freq_ctl.supported_clocks()
                 or [1410]
             )
-            if cands[-1] != 1410:
-                cands.append(1410)
-            #cands = [1410]
             self._solver = Alt1HeuristicSolver(
                 self._cfg, self._latency, self._power, cands
             )
@@ -628,8 +446,8 @@ def make_energy_scheduler_class():
                     ttft = self._cfg.default_ttft_ms
                     tpot = self._cfg.default_tpot_ms
                     w_n = self._cfg.default_w_n
-                arrival_ms = self._get_arrival_ms(req, now_ms)
-                wait_ms = now_ms - arrival_ms
+                arrival = getattr(req, "arrival_time", now_ms / 1000.0) * 1000.0
+                wait_ms = now_ms - arrival
                 l_q = getattr(req, "num_prompt_tokens", 0)
                 l_kv = 0
                 kv_blocks = (l_q + block_size - 1) // block_size
@@ -637,7 +455,6 @@ def make_energy_scheduler_class():
                     handle=req, is_prefill=True, l_q=l_q, l_kv=l_kv,
                     wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n,
                     kv_blocks_needed=kv_blocks,
-                    kv_blocks_incremental=kv_blocks,
                 ))
             for req in self.running:
                 extra = getattr(req, "sampling_params", None)
@@ -655,84 +472,36 @@ def make_energy_scheduler_class():
                 if last_exec_ms is not None:
                     wait_ms = now_ms - last_exec_ms
                 else:
-                    wait_ms = now_ms - self._get_arrival_ms(req, now_ms)
+                    arrival = getattr(req, "arrival_time", now_ms / 1000.0) * 1000.0
+                    wait_ms = now_ms - arrival
                 l_kv = getattr(req, "num_computed_tokens", 0)
                 l_q = 1
                 kv_blocks = (l_kv + block_size) // block_size
-                kv_inc = (l_kv + 1 + block_size - 1) // block_size - (l_kv + block_size - 1) // block_size
                 reqs.append(ReqView(
                     handle=req, is_prefill=False, l_q=l_q, l_kv=l_kv,
                     wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n,
                     kv_blocks_needed=kv_blocks,
-                    kv_blocks_incremental=kv_inc,
                 ))
             return reqs
 
         def _kv_evict(
-            self, chosen: List[ReqView], f_mhu: float,
-            now_ms: float = 0.0,
-        ) -> Tuple[List[ReqView], int]:
-            """Ensure KV cache can hold *chosen*; return (chosen, n_preempted).
-
-            Mode 1/2: shrink chosen (admission control).
-            Mode 3:   preempt non-chosen running requests to free blocks,
-                      fall back to shrinking chosen if still insufficient.
-            """
+            self, chosen: List[ReqView], f_mhu: float
+        ) -> List[ReqView]:
             kv_mgr = getattr(self, "kv_cache_manager", None)
             if kv_mgr is None:
-                return chosen, 0
+                return chosen
             block_pool = getattr(kv_mgr, "block_pool", None)
             if block_pool is None:
-                return chosen, 0
+                return chosen
             free_fn = getattr(block_pool, "get_num_free_blocks", None)
             if free_fn is None:
-                return chosen, 0
-
-            use_incremental = (self._cfg.eviction_mode >= 2)
-            n_preempted = 0
-
-            def _total_needed():
-                return sum(
-                    r.kv_blocks_incremental if use_incremental else r.kv_blocks_needed
-                    for r in chosen
-                )
-
-            if _total_needed() <= free_fn():
-                return chosen, 0
-
-            # ---------- Mode 3: preempt non-chosen running requests ----------
-            if self._cfg.eviction_mode == 3:
-                chosen_handles = {r.handle for r in chosen}
-                victims = [
-                    req for req in self.running
-                    if req not in chosen_handles
-                ]
-                victims.sort(
-                    key=lambda r: (
-                        getattr(r, "num_prompt_tokens", 0)
-                        + getattr(r, "num_computed_tokens", 0)
-                    )
-                )
-                timestamp_s = now_ms / 1000.0
-                for req in victims:
-                    if _total_needed() <= free_fn():
-                        break
-                    rid = getattr(req, "request_id", id(req))
-                    self.running.remove(req)
-                    self._preempt_request(req, timestamp_s)
-                    self._last_exec.pop(rid, None)
-                    self._req_state.pop(rid, None)
-                    n_preempted += 1
-
-                if _total_needed() <= free_fn():
-                    return chosen, n_preempted
-
-            # ---------- Mode 1/2 (or mode 3 fallback): shrink chosen ---------
+                return chosen
             while chosen:
-                total = _total_needed()
+                total = sum(r.kv_blocks_needed for r in chosen)
                 free = free_fn()
                 if total <= free:
                     break
+                # Evict the request with the lowest baseline reward (proxy).
                 v_t = []
                 for r in chosen:
                     t_q_s_r = per_request_time_ms(
@@ -745,7 +514,7 @@ def make_energy_scheduler_class():
                     v_t.append((v, r))
                 v_t.sort(key=lambda x: x[0])
                 chosen = [r for _, r in v_t[1:]]
-            return chosen, n_preempted
+            return chosen
 
         def _materialise_batch(self, chosen: List[ReqView]):
             waiting_handles = {r.handle for r in chosen if r.is_prefill}
@@ -780,33 +549,24 @@ def make_energy_scheduler_class():
             w_n = float(ea.get("w_n", self._cfg.default_w_n))
             return ttft, tpot, w_n
 
-        def _get_arrival_ms(self, req, now_ms: float) -> float:
-            """Return the best-known arrival time in ms for *req*.
-
-            Priority: client-side send_time (from extra_args) > vLLM
-            req.arrival_time > now_ms fallback.  send_time is the wall-clock
-            epoch (seconds) recorded by workload_sender right before the HTTP
-            POST, so it captures the full queuing delay that vLLM's
-            req.arrival_time may miss (the latter is set inside
-            input_processor.process_inputs, which can be delayed when the
-            engine event loop is busy).
-            """
-            sp = getattr(req, "sampling_params", None)
-            ea = getattr(sp, "extra_args", {}) if sp else {}
-            if isinstance(ea, dict):
-                st = ea.get("send_time")
-                if st is not None:
-                    return float(st) * 1000.0
-            if hasattr(req, "arrival_time") and req.arrival_time is not None:
-                return float(req.arrival_time) * 1000.0
-            return now_ms
-
         def _ensure_req_state(self, rid, req, now_ms: float):
             """Initialise self._req_state[rid] on first sight of the request."""
             if rid in self._req_state:
                 return
             ttft_slo, tpot_slo, w_n = self._extract_slos(req)
-            arrival_ms = self._get_arrival_ms(req, now_ms)
+            # Fail loudly if vLLM didn't give us arrival_time — silently
+            # falling back to now_ms would make TTFT_obs ≈ prefill-only,
+            # which collapses the online TTFT update and starves prefill.
+            if not hasattr(req, "arrival_time") or req.arrival_time is None:
+                import sys
+                print(
+                    f"[energy_sched-alg3_1] WARN req {rid} missing arrival_time "
+                    f"— TTFT_obs will be wrong; using now_ms as fallback",
+                    file=sys.stderr, flush=True,
+                )
+                arrival_ms = now_ms
+            else:
+                arrival_ms = float(req.arrival_time) * 1000.0
             self._req_state[rid] = {
                 "arrival_ms": arrival_ms,
                 "w_n": w_n,
@@ -860,7 +620,6 @@ def make_energy_scheduler_class():
                     slo = max(st["ttft_slo_ms"], 1e-6)
                     delta = cfg.eta_ttft * st["w_n"] * (ttft_obs_ms / slo - 1.0)
                     cfg.w_ttft = max(0.0, cfg.w_ttft + delta)  # [·]^+
-                    #cfg.w_ttft = cfg.w_ttft * math.exp(delta)  # alternative multiplicative update
                     st["ttft_fired"] = True
                     st["first_tok_ms"] = now_ms
                     n_ttft += 1
@@ -882,8 +641,7 @@ def make_energy_scheduler_class():
                 avg_tpot_obs_ms = (now_ms - st["first_tok_ms"]) / n_decode_tokens
                 slo = max(st["tpot_slo_ms"], 1e-6)
                 delta = cfg.eta_tpot * st["w_n"] * (avg_tpot_obs_ms / slo - 1.0)
-                cfg.w_tpot = max(0.01, cfg.w_tpot + delta)  # [·]^+
-                #cfg.w_tpot = cfg.w_tpot * math.exp(delta)
+                cfg.w_tpot = max(0.0, cfg.w_tpot + delta)  # [·]^+
                 n_tpot += 1
 
             return n_ttft, n_tpot
@@ -910,11 +668,10 @@ def make_energy_scheduler_class():
             )
             solve_ms = (time.monotonic() - t_solve0) * 1000.0
             self._freq_ctl.set_frequency(int(f_star))
-            n_preempted = 0
             if not chosen:
                 out = super().schedule()
             else:
-                chosen, n_preempted = self._kv_evict(chosen, f_star, now_ms)
+                chosen = self._kv_evict(chosen, f_star)
                 out = self._materialise_batch(chosen)
                 for r in chosen:
                     req_id = getattr(r.handle, "request_id", id(r.handle))
@@ -935,7 +692,6 @@ def make_energy_scheduler_class():
                         "batch_size": len(chosen),
                         "n_prefill": n_prefill,
                         "n_decode": n_decode,
-                        "n_preempted": n_preempted,
                         "f_star": int(f_star),
                         "et_pred_ms": et_pred,
                         "w_ttft": w_ttft_now,
