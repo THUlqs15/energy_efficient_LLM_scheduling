@@ -1,81 +1,3 @@
-"""Energy-aware scheduler for vLLM — Alt-1 HEURISTIC variant.
-
-Implements a CHEAP heuristic for **Alternative formulation 1** (soft exp
-deadline penalty, originally solved by τ-breakpoint enumeration in
-energy_scheduler_alt3.py).  This variant is faster but no longer optimal
-in the inner subproblem — instead of enumerating |T| × |F| × |M| triples
-with a per-(τ, f) greedy, we:
-
-    Step 1 (one-shot priority).  Score each request once with
-        q_n = r_n · min(exp(-s_n), CAP) / ℓ_{i,n}
-    where:
-        • r_n  = w_n · w_TTFT (prefill) or w_n · w_TPOT (decode);
-        • s_n  = deadline_n − T_{i,n}, the slack in SECONDS  (s_n>0 ⇒ on time);
-        • ℓ_{i,n} = per-iter token cost (prompt-len for prefill, 1 for decode);
-        • CAP = Alt1HeuristicSolver.EXP_CAP — caps the boost of very-overdue
-          requests so a single deeply-overdue item does not arbitrarily
-          dominate the priority order.
-
-    Step 2 (greedy fill).  Sort by q_n descending; admit in order while
-        cum_tokens + ℓ_n ≤ L_max  AND  |B| < B_max.
-    The batch B is fixed once a constraint binds; the resulting batch mode
-    M (prefill_only / decode_only / mixed) is implied by who got admitted.
-
-    Step 3 (joint (prefix, frequency) enumeration).  Let
-        B_j ≜ {first j items of B̂ in greedy admission order},   j = 1..|B̂|.
-    Note that {B_j} is a NESTED chain: B_1 ⊂ B_2 ⊂ ... ⊂ B_{|B̂|} = B̂.
-    We jointly enumerate (B_j, f) ∈ {B_1,..,B_{|B̂|}} × F and pick
-        (j*, f*) = argmax_{j,f}  Σ_{n∈B_j} r_n · exp(−[ET_i(B_j, f) − s_n]_+)
-                                 − β · P(f) · ET_i(B_j, f)
-    where ET_i(B_j, f) is the predicted batch latency in SECONDS, and the
-    final batch is B_{j*}.  The cap CAP applies ONLY to the priority q_n
-    used by Step 2; the objective in Step 3 uses the uncapped exp form per
-    the original Alt-1 utility.
-
-    PLAN A — ALWAYS COMMIT.  We initialise best_J = -∞ and ALWAYS pick the
-    argmax (j*, f*) regardless of the sign of best_J.  Rationale: vLLM
-    will execute *something* this iteration anyway (continuous batching),
-    so picking the least-bad (B_j, f) strictly dominates falling back to
-    the default scheduler when J* is mildly negative (which happens in
-    pathological cases where every queued request is deeply overdue).
-
-    INCREMENTAL OPTIMISATION.  Since {B_j} is nested, computing ET_i(B_j,f)
-    for all j is essentially free once ET_i(B̂, f) is computed: a single
-    np.cumsum over the per-request workload contributions yields num_p[j]
-    and num_d[j] for every prefix.  The mode indicators I_p(B_j),I_d(B_j)
-    are likewise monotone (0→1, never reset), computed by cumsum(...)>0.
-    The full Step 3 vectorises to a single (|F|, |B̂|, |B̂|) matrix product
-    plus one argmax.
-
-UNIT CONVENTION
----------------
-ALL time-related arithmetic in this module is in **SECONDS**:
-    s_n, ET_i(B, f), the φ argument [ET − s_n]_+ ⇒ all in s.
-At the boundary with the energy_model (which returns ms) and ReqView
-(which carries deadline_ms / wait_ms for backward compat with main.sh
-configs), there is exactly one /1000 conversion at ingest time and one
-×1000 conversion on the et_pred returned to the caller.
-
-WHY THIS HEURISTIC IS CHEAP
----------------------------
-    O(N log N) for the sort + O(N) greedy + O(|F| · |B̂|²) for the joint
-    (B_j, f) enumeration
-        ≈ O(N log N + |F| · |B̂|²)   per solve()
-
-vs. Alt-1's exact τ-enumeration which is O(|T| · |F| · N log N).  The
-factor of |T| = N (one breakpoint per request) is what saves us; the
-extra |B̂| factor (relative to a pure f-search) is the price of also
-optimising the prefix size, but is fully vectorised in NumPy.
-
-WHY THE PRIORITY q_n MAKES SENSE
---------------------------------
-The capped exp(−s_n) is a smooth proxy for "urgency":
-  • s_n large positive ⇒ comfortably before deadline ⇒ low urgency  ⇒ q_n small.
-  • s_n ≈ 0           ⇒ near deadline                ⇒ exp = 1.
-  • s_n large negative ⇒ deeply overdue              ⇒ urgency saturates at CAP.
-The /ℓ_n turns r_n · urgency into a "value-density per token" — fits a
-token-bounded knapsack greedily.
-"""
 from __future__ import annotations
 
 import json
@@ -110,8 +32,8 @@ class EnergySchedConfig:
     #     w_TTFT ← [w_TTFT + eta_ttft · w_n · (TTFT_obs/TTFT_slo − 1)]^+
     #     w_TPOT ← [w_TPOT + eta_tpot · w_n · (avg_TPOT_obs/TPOT_slo − 1)]^+
     # Not exposed through env on purpose — main.sh need not change.
-    eta_ttft: float = 1.0
-    eta_tpot: float = 1.0
+    eta_ttft: float = 0.0
+    eta_tpot: float = 0.0
     eta_ms: float = 1e9          # accepted from env for backward compat; UNUSED
     Lmax: int = 0
     max_batch_size: int = 0      # 0 → inherit from vLLM scheduler_config.max_num_seqs

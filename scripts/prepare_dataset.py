@@ -23,7 +23,7 @@ OUTPUT = "trace.jsonl"
 NUM_REQUESTS = 400
 # Number of requests to sample into the trace.
 
-RATE_QPS = 2.5
+RATE_QPS = 2
 # Arrival rate in requests/second. Record i arrives at time i / RATE_QPS.
 
 TTFT_MEAN_MS = 4000.0
@@ -38,7 +38,7 @@ TPOT_MEAN_MS = 100.0
 TPOT_STD_MS = 40.0
 # Std dev of the TPOT SLO requirement (ms).
 
-MIN_OUTPUT_TOKENS = 64
+MIN_OUTPUT_TOKENS = 1024
 # Minimum number of output tokens per request (uniformly sampled).
 
 MAX_OUTPUT_TOKENS = 1024
@@ -128,6 +128,7 @@ def main():
         for i, prompt in enumerate(prompts):
             arrival_s = i / RATE_QPS
             max_tokens = random.randint(MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS)
+            #max_tokens = MAX_OUTPUT_TOKENS
             ttft_ms = truncated_normal(TTFT_MEAN_MS, TTFT_STD_MS)
             tpot_ms = truncated_normal(TPOT_MEAN_MS, TPOT_STD_MS)
             record = {

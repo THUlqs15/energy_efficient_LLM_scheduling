@@ -40,7 +40,7 @@ GPU_INDEX=0
 MAX_MODEL_LEN=8192
 # Maximum sequence length (input + output tokens).
 
-MAX_NUM_SEQS=64
+MAX_NUM_SEQS=128
 # Maximum number of concurrent requests in the engine.
 
 GPU_MEM_UTIL=0.9
@@ -51,11 +51,11 @@ NUM_REQUESTS=400
 # Number of requests to send in this run.
 # Must not exceed the number of lines in trace.jsonl.
 
-RATE_QPS=2.5
+RATE_QPS=2
 # Request arrival rate (requests per second).
 # Determines how fast the workload is replayed from trace.jsonl.
 
-MIN_OUT_TOK=64
+MIN_OUT_TOK=1024
 # Minimum number of output tokens per request.
 
 MAX_OUT_TOK=1024
@@ -65,13 +65,13 @@ TRACE_SEED=42
 # Random seed for trace generation (used by prepare_dataset.py).
 
 # ----- Scheduler hyper-parameters (custom mode only) --------------------------
-BETA=0.02
+BETA=0.1
 # Energy-utility trade-off parameter. Larger β → solver prioritises energy
 # saving over SLO attainment, tends to pick lower GPU frequencies.
 # The energy term is β × Watts × seconds (Joules).
 # Typical range: 0.001 (mild energy saving) to 1.0 (aggressive energy saving).
 
-W_TTFT=10000.0
+W_TTFT=100000.0
 # Weight for TTFT in the per-request priority calculation.
 # Higher w_TTFT makes the solver more sensitive to TTFT deadlines.
 
@@ -87,7 +87,7 @@ ETA_MS=200
 LMAX=0
 # Maximum tokens per batch. 0 means inherit vLLM's max_num_batched_tokens.
 
-FREQ_STRIDE=2
+FREQ_STRIDE=3
 # Stride for frequency candidate subsampling. A800 has 82 supported SM clocks;
 # with stride=4, the solver evaluates every 4th clock (ceil(82/4) = 21 candidates).
 # Larger = faster solving but coarser frequency search.
