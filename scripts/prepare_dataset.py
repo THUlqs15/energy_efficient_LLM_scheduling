@@ -23,7 +23,7 @@ OUTPUT = "trace.jsonl"
 NUM_REQUESTS = 400
 # Number of requests to sample into the trace.
 
-RATE_QPS = 2
+RATE_QPS = 4
 # Arrival rate in requests/second. Record i arrives at time i / RATE_QPS.
 
 TTFT_MEAN_MS = 4000.0

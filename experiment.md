@@ -45,13 +45,13 @@ bash main.sh
 | `RATE_QPS` | `4` | Arrival rate (requests/second) |
 | `MIN_OUT_TOK` / `MAX_OUT_TOK` | `64` / `1024` | Output token range per request |
 | `TRACE_SEED` | `42` | Random seed for trace generation |
-| `BETA` | `0.0` | Energy-utility trade-off (larger = more energy-saving) |
-| `W_TTFT` | `100000.0` | Initial weight for TTFT in priority calculation (mutable — drifts online) |
+| `BETA` | `0.5` | Energy-utility trade-off (larger = more energy-saving) |
+| `W_TTFT` | `1000.0` | Initial weight for TTFT in priority calculation (mutable — drifts online) |
 | `W_TPOT` | `1.0` | Initial weight for TPOT in priority calculation (mutable — drifts online) |
 | `ETA_MS` | `200` | Per-iteration time budget η (ms); accepted for compat but currently unused by solver |
 | `LMAX` | `0` | Max tokens per batch (0 = inherit vLLM default) |
 | `FREQ_STRIDE` | `3` | Stride for frequency candidate subsampling |
-| `EVICTION_MODE` | `1` | KV cache eviction strategy (1=conservative, 2=incremental, 3=preempt) |
+| `EVICTION_MODE` | `2` | KV cache eviction strategy (1=conservative, 2=incremental, 3=preempt) |
 | `SOLUTION_MODE` | `2` | Solver heuristic (1=H2 freq-indep priority, 2=H3 freq-dep priority) |
 | `POWER_INTERVAL_S` | `0.1` | GPU power sampling interval (seconds) |
 
@@ -137,6 +137,8 @@ bash main.sh
 ### 3.3 `scripts/workload_sender.py` (173 lines) — Async workload replay
 
 **Purpose**: Reads `trace.jsonl` and asynchronously sends each request to the vLLM `/v1/completions` endpoint with `stream=true`, measuring per-request TTFT and TPOT.
+
+**L131–133: Custom TCP connector**: Uses `aiohttp.TCPConnector(limit=1000, limit_per_host=1000)` to raise the connection pool ceiling. The default aiohttp limit (100 total / 0 per-host) can become a bottleneck when hundreds of requests are in-flight concurrently at high QPS, causing artificial queuing at the HTTP layer that inflates measured TTFT. The explicit 1000-connection limit eliminates this bottleneck.
 
 **L19–34: `ResultRecord` dataclass**: Holds per-request metadata and results:
 - `id`, `prompt`, `max_tokens`, `ttft_slo_ms`, `tpot_slo_ms`, `w_n`, `arrival_s`
@@ -285,7 +287,7 @@ where:
   - `s_n` large positive → comfortably before deadline → low urgency → `q_n` small
   - `s_n ≈ 0` → near deadline → `exp(−s_n) ≈ 1`
   - `s_n` large negative → deeply overdue → urgency saturates at `CAP`
-- `CAP = 20000.0` — caps the boost of deeply-overdue requests so a single item does not arbitrarily dominate the priority order
+- `CAP = 200000.0` — caps the boost of deeply-overdue requests so a single item does not arbitrarily dominate the priority order (increased from 20000.0 to give overdue requests a stronger priority signal before saturation)
 - The `/ℓ_{i,n}` converts `r_n · urgency` into a "value-density per token" — suitable for a token-bounded knapsack greedy
 
 ##### Step 2: Density-Greedy Fill
@@ -427,11 +429,12 @@ This is crucial because vLLM's `req.arrival_time` is set inside `input_processor
 **`schedule()`**: Main entry point, called by vLLM on every scheduling iteration:
 1. Measures `exec_ms` — wall-clock gap since last `schedule()` exit.
 2. Runs `_online_update_weights(now_ms)` — updates `w_TTFT`/`w_TPOT`.
-3. Builds request views.
-4. Calls `solver.solve()`, sets GPU frequency.
-5. Runs KV eviction, materialises batch.
+3. Builds request views; captures `len_waiting_before` / `len_running_before` queue lengths.
+4. Calls `solver.solve()`, sets GPU frequency. Records solver-chosen request IDs split by prefill/decode.
+5. Runs KV eviction, materialises batch via `super().schedule()`.
 6. Records `last_exec[req_id] = now_ms` for all chosen requests.
-7. Logs iteration data (solve_ms, batch_size, n_prefill, n_decode, n_preempted, f_star, et_pred_ms, w_ttft, w_tpot, ttft_updates, tpot_updates).
+7. **Solver-vs-actual diagnostics**: Compares the solver's chosen batch against what `super().schedule()` actually scheduled. Computes `dropped_prefill`, `dropped_decode` (solver picked but parent didn't schedule), `extra_prefill`, `extra_decode` (parent scheduled but solver didn't pick), and `parent_preempted`. Prints a `[energy_sched-MISMATCH]` warning when the parent silently drops solver picks.
+8. Logs iteration data with extended fields: `solve_ms, batch_size, n_prefill, n_decode, n_preempted, f_star, et_pred_ms, w_ttft, w_tpot, ttft_updates, tpot_updates, len_waiting_before, len_running_before, chosen_total_tokens, actual_prefill, actual_decode, actual_total_tokens, dropped_prefill, dropped_decode, extra_prefill, extra_decode, parent_preempted`.
 
 ---
 
@@ -477,28 +480,28 @@ if _ENERGY_os.environ.get("VLLM_ENERGY_SCHEDULER", "0") == "1":
 
 ## 6. Results (latest run)
 
-Parameters: `BETA=0.0, W_TTFT=100000.0 (initial), W_TPOT=1.0 (initial), SOLUTION_MODE=2 (H3), EVICTION_MODE=1, MAX_NUM_SEQS=64, NUM_REQUESTS=400, RATE_QPS=4, FREQ_STRIDE=3`.
+Parameters: `BETA=0.5, W_TTFT=1000.0 (initial), W_TPOT=1.0 (initial), SOLUTION_MODE=2 (H3), EVICTION_MODE=2, MAX_NUM_SEQS=64, NUM_REQUESTS=400, RATE_QPS=4, FREQ_STRIDE=3`.
 
 | Metric | Default | Custom |
 |--------|---------|--------|
 | num_completed | 400 | 400 |
 | num_failed | 0 | 0 |
-| mean_ttft_ms | 12210.99 | 9216.16 |
-| mean_tpot_ms | 40.23 | 60.35 |
-| mean_ttft_violation_ms | 9194.52 | 6854.82 |
-| mean_tpot_violation_ms | 0.84 | 1.02 |
-| ttft_slo_attainment | 0.3125 | 0.4475 |
-| tpot_slo_attainment | 0.9325 | 0.93 |
-| mean_power_w | 349.07 | 346.51 |
-| total_energy_j | 53182.37 | 53355.91 |
-| mean_solve_exec_ratio | 0.0 | 0.012387 |
+| mean_ttft_ms | 22335.68 | 2237.17 |
+| mean_tpot_ms | 53.64 | 123.16 |
+| mean_ttft_violation_ms | 19655.05 | 57.44 |
+| mean_tpot_violation_ms | 2.15 | 28.27 |
+| ttft_slo_attainment | 0.3425 | 0.865 |
+| tpot_slo_attainment | 0.8725 | 0.2375 |
+| mean_power_w | 370.88 | 248.92 |
+| total_energy_j | 71101.37 | 62415.83 |
+| mean_solve_exec_ratio | 0.0 | 0.069486 |
 
 **Notes on results**:
 - All 400 requests completed in both modes.
-- **TTFT improvement**: Custom scheduler reduces mean TTFT by 24.5% (12211ms → 9216ms) and TTFT SLO attainment improves from 31.25% to 44.75%. The online adaptive weight update drives `w_TTFT` higher when violations are detected, making the solver prioritise prefill requests more aggressively.
-- **TPOT trade-off**: Mean TPOT increases from 40.23ms to 60.35ms (still within SLO for most requests — attainment drops only from 93.25% to 93.0%).
-- **Energy**: With `β=0.0`, the energy term is inactive — the solver optimises purely for SLO attainment. Power and energy are similar between default and custom (349W vs 347W, 53.2kJ vs 53.4kJ). To activate energy saving, increase `β` (e.g., `β=0.001`).
-- **Solver overhead**: `mean_solve_exec_ratio = 0.012` means the solver takes ~1.2% of batch execution time — negligible overhead.
+- **TTFT improvement**: Custom scheduler reduces mean TTFT by 90.0% (22336ms → 2237ms) and TTFT SLO attainment improves from 34.25% to 86.5%. The combination of a lower initial `w_TTFT=1000` (which lets the online adaptive update converge faster) and the higher `EXP_CAP=200000` (giving overdue requests stronger priority signal) drives dramatic prefill prioritisation.
+- **TPOT trade-off**: Mean TPOT increases from 53.64ms to 123.16ms, and TPOT SLO attainment drops from 87.25% to 23.75%. With `β=0.5`, the solver aggressively lowers GPU frequency to save energy, which lengthens decode latency. The energy savings come at the cost of TPOT performance.
+- **Energy saving**: With `β=0.5`, the energy term is active — mean power drops from 370.88W to 248.92W (−32.9%), and total energy drops from 71.1kJ to 62.4kJ (−12.2%). The solver actively selects lower GPU frequencies when the energy saving outweighs the SLO penalty.
+- **Solver overhead**: `mean_solve_exec_ratio = 0.069` means the solver takes ~6.9% of batch execution time — still acceptable, though higher than the previous `β=0.0` run due to the frequency-dependent H3 heuristic evaluating more candidates at non-trivial β.
 
 ## 7. How to Reproduce
 

@@ -129,7 +129,9 @@ async def main():
 
     sem = asyncio.Semaphore(args.max_concurrency)
     t_start = time.monotonic()
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit=1000, limit_per_host=1000)
+    async with aiohttp.ClientSession(connector=connector) as session:
+    #async with aiohttp.ClientSession() as session:
         tasks = []
         idx = 0
         results = []

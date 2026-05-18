@@ -101,7 +101,7 @@ class Alt1HeuristicSolver:
     # slack is already < −ln(CAP) all share the same maximum "urgency boost"
     # for the priority order; the objective in Step 3 still uses the
     # uncapped exp.  EXP_CAP = 5 ⇒ s_n < −ln(5) ≈ −1.609 s saturates.
-    EXP_CAP: float = 20000.0
+    EXP_CAP: float = 200000.0
 
     def __init__(
         self,
@@ -826,6 +826,9 @@ def make_energy_scheduler_class():
             w_tpot_now = float(self._cfg.w_tpot)
 
             reqs = self._build_request_views(now_ms)
+            # Capture queue lengths BEFORE _materialise_batch mutates them.
+            len_waiting_before = len(self.waiting)
+            len_running_before = len(self.running)
             t_solve0 = time.monotonic()
             f_star, chosen, et_pred = self._solver.solve(
                 reqs, self._cfg.Lmax, self._cfg.max_batch_size, self._iter
@@ -833,6 +836,18 @@ def make_energy_scheduler_class():
             solve_ms = (time.monotonic() - t_solve0) * 1000.0
             self._freq_ctl.set_frequency(int(f_star))
             n_preempted = 0
+            # Snapshot solver's choice (req_ids) so we can diff against
+            # what super().schedule() actually scheduled.
+            chosen_prefill_ids: set = set()
+            chosen_decode_ids: set = set()
+            chosen_total_tokens = 0
+            for r in chosen:
+                rid = getattr(r.handle, "request_id", str(id(r.handle)))
+                if r.is_prefill:
+                    chosen_prefill_ids.add(rid)
+                else:
+                    chosen_decode_ids.add(rid)
+                chosen_total_tokens += int(r.l_q)
             if not chosen:
                 out = super().schedule()
             else:
@@ -841,9 +856,40 @@ def make_energy_scheduler_class():
                 for r in chosen:
                     req_id = getattr(r.handle, "request_id", id(r.handle))
                     self._last_exec[req_id] = now_ms
-            # Per-batch composition counts.
+            # Per-batch composition counts (what solver chose AFTER _kv_evict).
             n_prefill = sum(1 for r in chosen if r.is_prefill)
             n_decode = len(chosen) - n_prefill
+
+            # ---- actual-vs-chosen diagnostics --------------------------
+            # Extract what the parent scheduler actually scheduled this step.
+            actual_new_ids = {nr.req_id for nr in out.scheduled_new_reqs}
+            cached = out.scheduled_cached_reqs
+            actual_cached_ids = set(cached.req_ids)
+            resumed_ids = set(cached.resumed_req_ids)
+            # Newly admitted prefills (state was WAITING) + resumed (were
+            # PREEMPTED, now back to RUNNING) — both consume an admission slot.
+            actual_prefill_ids = actual_new_ids | resumed_ids
+            actual_decode_ids = actual_cached_ids - resumed_ids
+            parent_preempted_ids = set(out.preempted_req_ids or ())
+            # Diff against solver's choice (only meaningful when chosen is non-empty).
+            dropped_prefill_ids = chosen_prefill_ids - actual_prefill_ids
+            dropped_decode_ids = chosen_decode_ids - actual_decode_ids
+            extra_prefill_ids = actual_prefill_ids - chosen_prefill_ids
+            extra_decode_ids = actual_decode_ids - chosen_decode_ids
+
+            # High-visibility warning when parent silently drops solver picks.
+            if chosen and (dropped_prefill_ids or dropped_decode_ids):
+                print(
+                    f"[energy_sched-MISMATCH] iter={self._iter} "
+                    f"chosen=p{len(chosen_prefill_ids)}d{len(chosen_decode_ids)} "
+                    f"actual=p{len(actual_prefill_ids)}d{len(actual_decode_ids)} "
+                    f"dropped=p{len(dropped_prefill_ids)}d{len(dropped_decode_ids)} "
+                    f"extra=p{len(extra_prefill_ids)}d{len(extra_decode_ids)} "
+                    f"parent_preempted={len(parent_preempted_ids)} "
+                    f"len_w={len_waiting_before} len_r={len_running_before}",
+                    flush=True,
+                )
+
             if self._iter_log is not None:
                 if self._prev_record is not None and exec_ms is not None:
                     rec = self._prev_record
@@ -864,6 +910,17 @@ def make_energy_scheduler_class():
                         "w_tpot": w_tpot_now,
                         "ttft_updates": n_ttft_upd,
                         "tpot_updates": n_tpot_upd,
+                        "len_waiting_before": len_waiting_before,
+                        "len_running_before": len_running_before,
+                        "chosen_total_tokens": chosen_total_tokens,
+                        "actual_prefill": len(actual_prefill_ids),
+                        "actual_decode": len(actual_decode_ids),
+                        "actual_total_tokens": int(out.total_num_scheduled_tokens),
+                        "dropped_prefill": len(dropped_prefill_ids),
+                        "dropped_decode": len(dropped_decode_ids),
+                        "extra_prefill": len(extra_prefill_ids),
+                        "extra_decode": len(extra_decode_ids),
+                        "parent_preempted": len(parent_preempted_ids),
                     }
                 else:
                     self._prev_record = None
@@ -874,6 +931,7 @@ def make_energy_scheduler_class():
                 print(
                     f"[energy_sched-alg3_1] iter={self._iter} f*={int(f_star)} "
                     f"|B|={len(chosen)}(p={n_prefill}d={n_decode}) "
+                    f"actual(p{len(actual_prefill_ids)}d{len(actual_decode_ids)}) "
                     f"solve_ms={solve_ms:.2f} exec_ms={exec_str} "
                     f"w_ttft={w_ttft_now:.3f} w_tpot={w_tpot_now:.3f} "
                     f"upd=({n_ttft_upd},{n_tpot_upd})",

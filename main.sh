@@ -51,7 +51,7 @@ NUM_REQUESTS=400
 # Number of requests to send in this run.
 # Must not exceed the number of lines in trace.jsonl.
 
-RATE_QPS=2
+RATE_QPS=4
 # Request arrival rate (requests per second).
 # Determines how fast the workload is replayed from trace.jsonl.
 
@@ -65,13 +65,13 @@ TRACE_SEED=42
 # Random seed for trace generation (used by prepare_dataset.py).
 
 # ----- Scheduler hyper-parameters (custom mode only) --------------------------
-BETA=0.1
+BETA=0.5
 # Energy-utility trade-off parameter. Larger β → solver prioritises energy
 # saving over SLO attainment, tends to pick lower GPU frequencies.
 # The energy term is β × Watts × seconds (Joules).
 # Typical range: 0.001 (mild energy saving) to 1.0 (aggressive energy saving).
 
-W_TTFT=100000.0
+W_TTFT=1000.0
 # Weight for TTFT in the per-request priority calculation.
 # Higher w_TTFT makes the solver more sensitive to TTFT deadlines.
 
@@ -93,7 +93,7 @@ FREQ_STRIDE=3
 # Larger = faster solving but coarser frequency search.
 # Typical range: 1 (exhaustive) to 8 (very fast).
 
-EVICTION_MODE=1
+EVICTION_MODE=2
 # KV cache eviction strategy:
 #   1 = conservative (full KV size per request, shrink chosen batch)
 #   2 = incremental (new blocks only, shrink chosen batch, matches vLLM allocate_slots)
