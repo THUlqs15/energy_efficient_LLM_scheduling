@@ -42,8 +42,8 @@ class EnergySchedConfig:
     default_tpot_ms: float = 200.0
     freq_candidates: Optional[List[int]] = None
     freq_stride: int = 1
-    eviction_mode: int = 1   # 1=conservative, 2=incremental, 3=preempt non-chosen running reqs
     solution_mode: int = 1   # 1=H2 (freq-indep priority), 2=H3 (freq-dep priority)
+    chunked_prefill: bool = False  # True → recognise partial-prefill in running queue
     log_every_n: int = 50
     iter_log_path: Optional[str] = None
 
@@ -57,8 +57,8 @@ class EnergySchedConfig:
             Lmax=int(os.environ.get("VLLM_ENERGY_LMAX", "0")),
             max_batch_size=int(os.environ.get("VLLM_ENERGY_MAX_BATCH_SIZE", "0")),
             freq_stride=int(os.environ.get("VLLM_ENERGY_FREQ_STRIDE", "1")),
-            eviction_mode=int(os.environ.get("VLLM_ENERGY_EVICTION_MODE", "1")),
             solution_mode=int(os.environ.get("VLLM_ENERGY_SOLUTION_MODE", "1")),
+            chunked_prefill=os.environ.get("VLLM_ENERGY_CHUNKED_PREFILL", "0") == "1",
             iter_log_path=os.environ.get("VLLM_ENERGY_ITER_LOG"),
         )
 
@@ -197,16 +197,25 @@ class Alt1HeuristicSolver:
         has_pf = False
         has_dc = False
 
+        chunked = self.cfg.chunked_prefill
         for idx in order:
             if len(picked_local) >= B_eff:
                 break  # |B| cap binds — no further additions possible
             tok_n = int(tok_arr[idx])
             if used_tok + tok_n > Lmax:
-                # This one is too big for the remaining token budget; skip
-                # and try smaller items further down the order — same policy
-                # as alt3's incremental greedy.  This means we DO NOT stop
-                # at the first L_max overflow; we just refuse this item.
-                continue
+                if chunked and bool(is_pf[idx]):
+                    tok_n = Lmax - used_tok
+                    if tok_n <= 0:
+                        continue
+                    actual_lq = float(tok_n)
+                    actual_lkv = float(l_kv[idx])
+                    tok_arr[idx] = tok_n
+                    wp_contrib[idx] = (lat.a_p * actual_lq * actual_lq
+                                       + lat.b_p * actual_lq * actual_lkv
+                                       + lat.c_p * actual_lq)
+                    reqs[int(idx)].l_q = tok_n
+                else:
+                    continue
             picked_local.append(int(idx))
             used_tok += tok_n
             if bool(is_pf[idx]):
@@ -387,7 +396,9 @@ class Alt1HeuristicSolver:
         global_best_f = float(default_f)
         global_best_chosen: List[int] = []
         global_best_et_s = 0.0
+        global_best_chunked: dict = {}
 
+        chunked = self.cfg.chunked_prefill
         for fi in range(F):
             f_float = float(f_arr[fi])
             f_alpha = float(f_alpha_arr[fi])
@@ -395,13 +406,16 @@ class Alt1HeuristicSolver:
             order_fi = orders_all[fi]                            # (N,)
 
             # -- Step 2: greedy admission (fast-path via cumsum) -------------
+            # chunked_override: maps position-in-picked → (new_wp, actual_lq)
+            # (only set when a prefill request is chunked to fit Lmax).
+            chunked_override: dict = {}
             tok_sorted = tok_arr[order_fi]                       # (N,)
             B_try = min(B_eff, N)
             cum_tok_b = np.cumsum(tok_sorted[:B_try])
             if cum_tok_b[B_try - 1] <= Lmax:
                 picked_local = order_fi[:B_try].tolist()
             else:
-                # Fallback: sequential scan with skip semantics
+                # Fallback: sequential scan with skip/chunk semantics
                 order_list = order_fi.tolist()
                 tok_list = tok_sorted.tolist()
                 picked_local = []
@@ -410,9 +424,21 @@ class Alt1HeuristicSolver:
                     if len(picked_local) >= B_eff:
                         break
                     tok_n = tok_list[i]
+                    orig_idx = order_list[i]
                     if used_tok + tok_n > Lmax:
-                        continue
-                    picked_local.append(order_list[i])
+                        if chunked and bool(is_pf[orig_idx]):
+                            tok_n = Lmax - used_tok
+                            if tok_n <= 0:
+                                continue
+                            actual_lq = float(tok_n)
+                            actual_lkv = float(l_kv[orig_idx])
+                            new_wp = (lat.a_p * actual_lq * actual_lq
+                                      + lat.b_p * actual_lq * actual_lkv
+                                      + lat.c_p * actual_lq)
+                            chunked_override[len(picked_local)] = (new_wp, tok_n)
+                        else:
+                            continue
+                    picked_local.append(orig_idx)
                     used_tok += tok_n
 
             if not picked_local:
@@ -424,6 +450,9 @@ class Alt1HeuristicSolver:
             is_pf_picked = is_pf[picked_idx]
 
             dp = wp_contrib[picked_idx].astype(np.float64)
+            if chunked_override:
+                for pos, (new_wp, _) in chunked_override.items():
+                    dp[pos] = new_wp
             dd = wd_contrib[picked_idx].astype(np.float64)
             cum_dp = np.cumsum(dp)
             cum_dd = np.cumsum(dd)
@@ -454,9 +483,15 @@ class Alt1HeuristicSolver:
                 global_best_f = f_float
                 global_best_chosen = picked_local[:best_jidx + 1]
                 global_best_et_s = float(ET_s[best_jidx])
+                global_best_chunked = dict(chunked_override)
 
         if not global_best_chosen:
             return float(default_f), [], 0.0
+
+        n_chosen = len(global_best_chosen)
+        for pos, (_, actual_lq) in global_best_chunked.items():
+            if pos < n_chosen:
+                reqs[global_best_chosen[pos]].l_q = actual_lq
 
         if debug_iter >= 0 and debug_iter % 10 == 0:
             import sys
@@ -514,15 +549,17 @@ def make_energy_scheduler_class():
                     self.scheduler_config, "max_num_batched_tokens",
                     getattr(self.scheduler_config, "max_model_len", 8192),
                 ))
+            self._active_cap = int(getattr(
+                self.scheduler_config, "max_num_seqs", 128
+            ))
             if self._cfg.max_batch_size <= 0:
-                self._cfg.max_batch_size = int(getattr(
-                    self.scheduler_config, "max_num_seqs", 128
-                ))
+                self._cfg.max_batch_size = self._active_cap
             self._iter_log = _open_iter_log(self._cfg.iter_log_path)
             self._prev_exit_t = None
             self._iter = 0
             self._prev_record = None
             self._last_exec = {}
+            self._materialise_fail_streak = 0
             # Per-request state for the SLO-weight online update.
             # Keyed by req_id, value is a dict with the following fields:
             #   arrival_ms      : float, request arrival time (ms wall-clock)
@@ -536,10 +573,14 @@ def make_energy_scheduler_class():
             #   last_num_out    : int,   last-observed num_output_tokens
             self._req_state: dict = {}
 
-        def _build_request_views(self, now_ms: float) -> List[ReqView]:
+        def _build_request_views(self, now_ms: float,
+                                    skip_waiting: bool = False,
+                                    ) -> List[ReqView]:
             reqs: List[ReqView] = []
             block_size = getattr(self, "block_size", 16)
-            for req in self.waiting:
+            chunked = self._cfg.chunked_prefill
+            waiting_iter = () if skip_waiting else self.waiting
+            for req in waiting_iter:
                 extra = getattr(req, "sampling_params", None)
                 ea = getattr(extra, "extra_args", {}) if extra else {}
                 if isinstance(ea, dict):
@@ -572,106 +613,231 @@ def make_energy_scheduler_class():
                     ttft = self._cfg.default_ttft_ms
                     tpot = self._cfg.default_tpot_ms
                     w_n = self._cfg.default_w_n
-                req_id = getattr(req, "request_id", id(req))
-                last_exec_ms = self._last_exec.get(req_id)
-                if last_exec_ms is not None:
-                    wait_ms = now_ms - last_exec_ms
+                num_prompt = getattr(req, "num_prompt_tokens", 0)
+                num_computed = getattr(req, "num_computed_tokens", 0)
+                if chunked and num_computed < num_prompt:
+                    # --- partial prefill: still in prefill phase ---
+                    remaining = num_prompt - num_computed
+                    l_q = remaining
+                    l_kv = num_computed
+                    arrival_ms = self._get_arrival_ms(req, now_ms)
+                    wait_ms = now_ms - arrival_ms
+                    kv_blocks = (num_prompt + block_size - 1) // block_size
+                    kv_inc = ((num_computed + remaining + block_size - 1) // block_size
+                              - (num_computed + block_size - 1) // block_size)
+                    reqs.append(ReqView(
+                        handle=req, is_prefill=True, l_q=l_q, l_kv=l_kv,
+                        wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n,
+                        kv_blocks_needed=kv_blocks,
+                        kv_blocks_incremental=kv_inc,
+                    ))
                 else:
-                    wait_ms = now_ms - self._get_arrival_ms(req, now_ms)
-                l_kv = getattr(req, "num_computed_tokens", 0)
-                l_q = 1
-                kv_blocks = (l_kv + block_size) // block_size
-                kv_inc = (l_kv + 1 + block_size - 1) // block_size - (l_kv + block_size - 1) // block_size
-                reqs.append(ReqView(
-                    handle=req, is_prefill=False, l_q=l_q, l_kv=l_kv,
-                    wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n,
-                    kv_blocks_needed=kv_blocks,
-                    kv_blocks_incremental=kv_inc,
-                ))
+                    # --- decode (original logic) ---
+                    req_id = getattr(req, "request_id", id(req))
+                    last_exec_ms = self._last_exec.get(req_id)
+                    if last_exec_ms is not None:
+                        wait_ms = now_ms - last_exec_ms
+                    else:
+                        wait_ms = now_ms - self._get_arrival_ms(req, now_ms)
+                    l_kv = num_computed
+                    l_q = 1
+                    kv_blocks = (l_kv + block_size) // block_size
+                    kv_inc = ((l_kv + 1 + block_size - 1) // block_size
+                              - (l_kv + block_size - 1) // block_size)
+                    reqs.append(ReqView(
+                        handle=req, is_prefill=False, l_q=l_q, l_kv=l_kv,
+                        wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n,
+                        kv_blocks_needed=kv_blocks,
+                        kv_blocks_incremental=kv_inc,
+                    ))
             return reqs
+
+        def _enforce_active_cap(
+            self, chosen: List[ReqView], now_ms: float,
+        ) -> Tuple[List[ReqView], int]:
+            """Ensure len(running) + newly_admitted <= active_cap.
+
+            Phase 1: preempt non-chosen running (lowest num_computed_tokens first).
+            Phase 2: drop least-urgent new admissions from chosen.
+            """
+            waiting_set = set(self.waiting)
+            n_new = sum(1 for r in chosen if r.handle in waiting_set)
+            active_after = len(self.running) + n_new
+
+            if active_after <= self._active_cap:
+                return chosen, 0
+
+            # Phase 1: preempt non-chosen running requests
+            chosen_handles = {r.handle for r in chosen}
+            victims = [
+                req for req in self.running
+                if req not in chosen_handles
+            ]
+            victims.sort(
+                key=lambda r: getattr(r, "num_computed_tokens", 0)
+            )
+            n_preempted = 0
+            timestamp_s = now_ms / 1000.0
+            for req in victims:
+                if active_after <= self._active_cap:
+                    break
+                rid = getattr(req, "request_id", id(req))
+                self.running.remove(req)
+                self._preempt_request(req, timestamp_s)
+                self._last_exec.pop(rid, None)
+                self._req_state.pop(rid, None)
+                n_preempted += 1
+                active_after -= 1
+
+            # Phase 2: if still over, drop least-urgent new admissions from chosen
+            if active_after > self._active_cap:
+                new_reqs = [r for r in chosen if r.handle in waiting_set]
+                new_reqs.sort(key=lambda r: r.deadline_ms - r.wait_ms, reverse=True)
+                to_remove = set()
+                for r in new_reqs:
+                    if active_after <= self._active_cap:
+                        break
+                    to_remove.add(id(r))
+                    active_after -= 1
+                chosen = [r for r in chosen if id(r) not in to_remove]
+
+            return chosen, n_preempted
 
         def _kv_evict(
             self, chosen: List[ReqView], f_mhu: float,
             now_ms: float = 0.0,
-        ) -> Tuple[List[ReqView], int]:
-            """Ensure KV cache can hold *chosen*; return (chosen, n_preempted).
+        ) -> Tuple[List[ReqView], dict]:
+            """Ensure enough free KV blocks for chosen's incremental needs.
 
-            Mode 1/2: shrink chosen (admission control).
-            Mode 3:   preempt non-chosen running requests to free blocks,
-                      fall back to shrinking chosen if still insufficient.
+            Three-phase eviction (all sorted by num_computed_tokens ascending):
+              Phase A: drop waiting requests from chosen (reduces demand, zero cost)
+              Phase B: preempt unchosen running (frees supply, no solver disruption)
+              Phase C: preempt chosen running (frees supply, last resort)
+
+            Returns (chosen, evict_info_dict) where evict_info_dict contains
+            detailed counts for logging.
             """
+            info = {
+                "n_dropped_waiting_kv": 0,
+                "n_preempted_kv_unchosen": 0,
+                "n_preempted_kv_chosen": 0,
+                "free_blocks_before": 0,
+                "kv_needed": 0,
+                "free_blocks_after": 0,
+            }
             kv_mgr = getattr(self, "kv_cache_manager", None)
             if kv_mgr is None:
-                return chosen, 0
+                return chosen, info
             block_pool = getattr(kv_mgr, "block_pool", None)
             if block_pool is None:
-                return chosen, 0
+                return chosen, info
             free_fn = getattr(block_pool, "get_num_free_blocks", None)
             if free_fn is None:
-                return chosen, 0
-
-            use_incremental = (self._cfg.eviction_mode >= 2)
-            n_preempted = 0
+                return chosen, info
 
             def _total_needed():
-                return sum(
-                    r.kv_blocks_incremental if use_incremental else r.kv_blocks_needed
-                    for r in chosen
-                )
+                return sum(r.kv_blocks_incremental for r in chosen)
 
-            if _total_needed() <= free_fn():
-                return chosen, 0
+            needed = _total_needed()
+            free_before = free_fn()
+            info["free_blocks_before"] = free_before
+            info["kv_needed"] = needed
 
-            # ---------- Mode 3: preempt non-chosen running requests ----------
-            if self._cfg.eviction_mode == 3:
-                chosen_handles = {r.handle for r in chosen}
-                victims = [
-                    req for req in self.running
-                    if req not in chosen_handles
-                ]
-                victims.sort(
-                    key=lambda r: (
-                        getattr(r, "num_prompt_tokens", 0)
-                        + getattr(r, "num_computed_tokens", 0)
-                    )
-                )
-                timestamp_s = now_ms / 1000.0
-                for req in victims:
-                    if _total_needed() <= free_fn():
-                        break
-                    rid = getattr(req, "request_id", id(req))
-                    self.running.remove(req)
-                    self._preempt_request(req, timestamp_s)
-                    self._last_exec.pop(rid, None)
-                    self._req_state.pop(rid, None)
-                    n_preempted += 1
+            if needed <= free_before:
+                info["free_blocks_after"] = free_before
+                return chosen, info
 
-                if _total_needed() <= free_fn():
-                    return chosen, n_preempted
+            waiting_set = set(self.waiting)
+            timestamp_s = now_ms / 1000.0
+            needed_remaining = needed
 
-            # ---------- Mode 1/2 (or mode 3 fallback): shrink chosen ---------
-            while chosen:
-                total = _total_needed()
-                free = free_fn()
-                if total <= free:
+            # --- Phase A: drop waiting requests from chosen ---
+            # (reduces demand; they have no KV yet, cheapest action)
+            # Never drop the last request — let Phase B/C free KV instead.
+            chosen_waiting = [
+                r for r in chosen if r.handle in waiting_set
+            ]
+            chosen_waiting.sort(
+                key=lambda r: getattr(r.handle, "num_computed_tokens", 0)
+            )
+            n_non_waiting = sum(1 for r in chosen if r.handle not in waiting_set)
+            to_drop = set()
+            for r in chosen_waiting:
+                if needed_remaining <= free_fn():
                     break
-                v_t = []
-                for r in chosen:
-                    t_q_s_r = per_request_time_ms(
-                        self._latency, f_mhu, r.is_prefill, r.l_q, r.l_kv
-                    ) / 1000.0
-                    v = (
-                        baseline_reward(r, self._cfg)
-                        - self._cfg.beta * self._power.power_watts(f_mhu) * t_q_s_r
-                    )
-                    v_t.append((v, r))
-                v_t.sort(key=lambda x: x[0])
-                chosen = [r for _, r in v_t[1:]]
-            return chosen, n_preempted
+                if len(chosen) - len(to_drop) <= 1:
+                    break
+                if n_non_waiting == 0 and len(chosen_waiting) - len(to_drop) <= 1:
+                    break
+                needed_remaining -= r.kv_blocks_incremental
+                to_drop.add(id(r))
+                info["n_dropped_waiting_kv"] += 1
+            if to_drop:
+                chosen = [r for r in chosen if id(r) not in to_drop]
+
+            if needed_remaining <= free_fn():
+                info["free_blocks_after"] = free_fn()
+                return chosen, info
+
+            # --- Phase B: preempt unchosen running ---
+            # (frees existing KV blocks; does not disrupt solver's batch)
+            chosen_handles = {r.handle for r in chosen}
+            unchosen_running = [
+                req for req in self.running
+                if req not in chosen_handles
+            ]
+            unchosen_running.sort(
+                key=lambda r: getattr(r, "num_computed_tokens", 0)
+            )
+            for req in unchosen_running:
+                if needed_remaining <= free_fn():
+                    break
+                rid = getattr(req, "request_id", id(req))
+                self.running.remove(req)
+                self._preempt_request(req, timestamp_s)
+                self._last_exec.pop(rid, None)
+                self._req_state.pop(rid, None)
+                info["n_preempted_kv_unchosen"] += 1
+
+            if needed_remaining <= free_fn():
+                info["free_blocks_after"] = free_fn()
+                return chosen, info
+
+            # --- Phase C: preempt chosen running (last resort) ---
+            # (frees existing KV blocks; breaks solver decision)
+            chosen_running = [
+                r for r in chosen if r.handle not in waiting_set
+            ]
+            chosen_running.sort(
+                key=lambda r: getattr(r.handle, "num_computed_tokens", 0)
+            )
+            to_preempt = set()
+            for r in chosen_running:
+                if needed_remaining <= free_fn():
+                    break
+                rid = getattr(r.handle, "request_id", id(r.handle))
+                self.running.remove(r.handle)
+                self._preempt_request(r.handle, timestamp_s)
+                self._last_exec.pop(rid, None)
+                self._req_state.pop(rid, None)
+                needed_remaining -= r.kv_blocks_incremental
+                to_preempt.add(id(r))
+                info["n_preempted_kv_chosen"] += 1
+            if to_preempt:
+                chosen = [r for r in chosen if id(r) not in to_preempt]
+
+            info["free_blocks_after"] = free_fn()
+            return chosen, info
 
         def _materialise_batch(self, chosen: List[ReqView]):
-            waiting_handles = {r.handle for r in chosen if r.is_prefill}
-            running_handles = {r.handle for r in chosen if not r.is_prefill}
+            if self._cfg.chunked_prefill:
+                waiting_set = set(self.waiting)
+                chosen_handles = {r.handle for r in chosen}
+                waiting_handles = {h for h in chosen_handles if h in waiting_set}
+                running_handles = {h for h in chosen_handles if h not in waiting_set}
+            else:
+                waiting_handles = {r.handle for r in chosen if r.is_prefill}
+                running_handles = {r.handle for r in chosen if not r.is_prefill}
             saved_waiting = [
                 r for r in self.waiting if r not in waiting_handles
             ]
@@ -825,7 +991,8 @@ def make_energy_scheduler_class():
             w_ttft_now = float(self._cfg.w_ttft)
             w_tpot_now = float(self._cfg.w_tpot)
 
-            reqs = self._build_request_views(now_ms)
+            skip_w = self._materialise_fail_streak >= 2 and len(self.running) > 0
+            reqs = self._build_request_views(now_ms, skip_waiting=skip_w)
             # Capture queue lengths BEFORE _materialise_batch mutates them.
             len_waiting_before = len(self.waiting)
             len_running_before = len(self.running)
@@ -836,6 +1003,15 @@ def make_energy_scheduler_class():
             solve_ms = (time.monotonic() - t_solve0) * 1000.0
             self._freq_ctl.set_frequency(int(f_star))
             n_preempted = 0
+            n_preempted_a = 0
+            kv_evict_info = {
+                "n_dropped_waiting_kv": 0,
+                "n_preempted_kv_unchosen": 0,
+                "n_preempted_kv_chosen": 0,
+                "free_blocks_before": 0,
+                "kv_needed": 0,
+                "free_blocks_after": 0,
+            }
             # Snapshot solver's choice (req_ids) so we can diff against
             # what super().schedule() actually scheduled.
             chosen_prefill_ids: set = set()
@@ -851,11 +1027,37 @@ def make_energy_scheduler_class():
             if not chosen:
                 out = super().schedule()
             else:
-                chosen, n_preempted = self._kv_evict(chosen, f_star, now_ms)
-                out = self._materialise_batch(chosen)
-                for r in chosen:
-                    req_id = getattr(r.handle, "request_id", id(r.handle))
-                    self._last_exec[req_id] = now_ms
+                # Sync kv_blocks_incremental for chunked prefills (solver may
+                # have reduced r.l_q to a chunk smaller than the full remaining).
+                if self._cfg.chunked_prefill:
+                    block_size = getattr(self, "block_size", 16)
+                    for r in chosen:
+                        if r.is_prefill:
+                            new_end = int(r.l_kv) + int(r.l_q)
+                            r.kv_blocks_incremental = (
+                                (new_end + block_size - 1) // block_size
+                                - (int(r.l_kv) + block_size - 1) // block_size
+                            )
+                chosen, n_preempted_a = self._enforce_active_cap(chosen, now_ms)
+                chosen, kv_evict_info = self._kv_evict(chosen, f_star, now_ms)
+                n_preempted_k = (kv_evict_info["n_preempted_kv_unchosen"]
+                                 + kv_evict_info["n_preempted_kv_chosen"])
+                n_preempted = n_preempted_a + n_preempted_k
+                if not chosen:
+                    out = super().schedule()
+                else:
+                    out = self._materialise_batch(chosen)
+                    if out.total_num_scheduled_tokens == 0:
+                        self._materialise_fail_streak += 1
+                        out = super().schedule()
+                        chosen = []
+                        for rid in out.num_scheduled_tokens:
+                            self._last_exec[rid] = now_ms
+                    else:
+                        self._materialise_fail_streak = 0
+                        for r in chosen:
+                            req_id = getattr(r.handle, "request_id", id(r.handle))
+                            self._last_exec[req_id] = now_ms
             # Per-batch composition counts (what solver chose AFTER _kv_evict).
             n_prefill = sum(1 for r in chosen if r.is_prefill)
             n_decode = len(chosen) - n_prefill
@@ -866,10 +1068,14 @@ def make_energy_scheduler_class():
             cached = out.scheduled_cached_reqs
             actual_cached_ids = set(cached.req_ids)
             resumed_ids = set(cached.resumed_req_ids)
-            # Newly admitted prefills (state was WAITING) + resumed (were
-            # PREEMPTED, now back to RUNNING) — both consume an admission slot.
             actual_prefill_ids = actual_new_ids | resumed_ids
             actual_decode_ids = actual_cached_ids - resumed_ids
+            # Reclassify partial-prefill running requests: solver marks them
+            # as prefill (still doing prefill work), but parent reports them
+            # as cached (they are in the running queue).  Align with solver.
+            partial_pf = actual_cached_ids & chosen_prefill_ids
+            actual_prefill_ids = actual_prefill_ids | partial_pf
+            actual_decode_ids = actual_decode_ids - partial_pf
             parent_preempted_ids = set(out.preempted_req_ids or ())
             # Diff against solver's choice (only meaningful when chosen is non-empty).
             dropped_prefill_ids = chosen_prefill_ids - actual_prefill_ids
@@ -904,6 +1110,13 @@ def make_energy_scheduler_class():
                         "n_prefill": n_prefill,
                         "n_decode": n_decode,
                         "n_preempted": n_preempted,
+                        "n_preempted_active_cap": n_preempted_a,
+                        "n_preempted_kv_unchosen": kv_evict_info["n_preempted_kv_unchosen"],
+                        "n_preempted_kv_chosen": kv_evict_info["n_preempted_kv_chosen"],
+                        "n_dropped_waiting_kv": kv_evict_info["n_dropped_waiting_kv"],
+                        "free_blocks_before": kv_evict_info["free_blocks_before"],
+                        "kv_needed": kv_evict_info["kv_needed"],
+                        "free_blocks_after": kv_evict_info["free_blocks_after"],
                         "f_star": int(f_star),
                         "et_pred_ms": et_pred,
                         "w_ttft": w_ttft_now,

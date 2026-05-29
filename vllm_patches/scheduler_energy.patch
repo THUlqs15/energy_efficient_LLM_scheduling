@@ -1,0 +1,575 @@
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index fe524ccac..facf3b4d6 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -295,6 +295,52 @@ class Scheduler(SchedulerInterface):
+ 
+         self._pause_state: PauseState = PauseState.UNPAUSED
+ 
++        import os as _os
++        self._energy_enabled = _os.environ.get(
++            "VLLM_ENERGY_SCHEDULER", "0") == "1"
++        if self._energy_enabled:
++            from vllm.energy_sched.solver import (
++                EnergySchedConfig,
++                Alt1HeuristicSolver,
++                _open_iter_log,
++            )
++            from vllm.energy_sched.energy_model import (
++                load_latency_params,
++                load_power_params,
++            )
++            from vllm.energy_sched.frequency_controller import get_controller
++
++            self._ecfg = EnergySchedConfig.from_env()
++            self._elat = load_latency_params()
++            self._epow = load_power_params()
++            self._efreq = get_controller()
++            cands = (self._ecfg.freq_candidates
++                     or self._efreq.supported_clocks()
++                     or [1410])
++            if cands[-1] != 1410:
++                cands.append(1410)
++            self._esolver = Alt1HeuristicSolver(
++                self._ecfg, self._elat, self._epow, cands)
++            if self._ecfg.Lmax <= 0:
++                self._ecfg.Lmax = self.max_num_scheduled_tokens
++            if self._ecfg.max_batch_size <= 0:
++                self._ecfg.max_batch_size = self.max_num_running_reqs
++            self._elog = _open_iter_log(self._ecfg.iter_log_path)
++            self._eprev_exit_t: float | None = None
++            self._eiter = 0
++            self._eprev_record: dict | None = None
++            self._elast_exec: dict[str, float] = {}
++            self._ereq_state: dict[str, dict] = {}
++            self._epreempt_cooldown: dict[str, float] = {}
++            import sys
++            print("[energy_sched] Embedded energy scheduler initialised "
++                  f"(mode={self._ecfg.solution_mode}, "
++                  f"beta={self._ecfg.beta}, "
++                  f"Lmax={self._ecfg.Lmax}, "
++                  f"Bmax={self._ecfg.max_batch_size}, "
++                  f"|F|={len(cands)})",
++                  file=sys.stderr, flush=True)
++
+     def _mamba_block_aligned_split(
+         self,
+         request: Request,
+@@ -346,6 +392,9 @@ class Scheduler(SchedulerInterface):
+         return num_new_tokens
+ 
+     def schedule(self) -> SchedulerOutput:
++        if self._energy_enabled:
++            return self._schedule_energy()
++
+         # NOTE(woosuk) on the scheduling algorithm:
+         # There's no "decoding phase" nor "prefill phase" in the scheduler.
+         # Each request just has the num_computed_tokens and
+@@ -948,6 +997,499 @@ class Scheduler(SchedulerInterface):
+             self._update_after_schedule(scheduler_output)
+         return scheduler_output
+ 
++    # =================================================================
++    # Energy-efficient scheduling (embedded path)
++    # =================================================================
++
++    def _schedule_energy(self) -> SchedulerOutput:
++        import json as _json
++
++        t_enter = time.monotonic()
++        exec_ms = ((t_enter - self._eprev_exit_t) * 1000.0
++                   if self._eprev_exit_t is not None else None)
++        now_ms = time.time() * 1000.0
++        cooldown_released = self._energy_release_preempt_cooldowns(now_ms)
++
++        # Phase 0 — online SLO-weight update
++        n_ttft_upd, n_tpot_upd = self._energy_update_weights(now_ms)
++        w_ttft_now = float(self._ecfg.w_ttft)
++        w_tpot_now = float(self._ecfg.w_tpot)
++
++        # Phase 1 — build views + solve
++        len_waiting_before = len(self.waiting)
++        len_running_before = len(self.running)
++        block_pool = getattr(self.kv_cache_manager, "block_pool", None)
++        if block_pool is not None:
++            free_blocks_before_solve = block_pool.get_num_free_blocks()
++            free_kv_tokens = free_blocks_before_solve * self.block_size
++            effective_Lmax = min(
++                self._ecfg.Lmax, int(0.95 * float(free_kv_tokens)))
++        else:
++            free_blocks_before_solve = 0
++            effective_Lmax = self._ecfg.Lmax
++        effective_Lmax = max(0, int(effective_Lmax))
++        waiting_capacity = max(
++            0, self.max_num_running_reqs - len_running_before)
++
++        views = self._energy_build_views(now_ms)
++        t_solve0 = time.monotonic()
++        f_star, chosen, et_pred = self._esolver.solve(
++            views, effective_Lmax, self._ecfg.max_batch_size, self._eiter,
++            waiting_capacity=waiting_capacity)
++        solve_ms = (time.monotonic() - t_solve0) * 1000.0
++
++        # Phase 2 — init scheduling state
++        scheduled_new_reqs: list[Request] = []
++        scheduled_resumed_reqs: list[Request] = []
++        scheduled_running_reqs: list[Request] = []
++        preempted_reqs: list[Request] = []
++        req_to_new_blocks: dict[str, KVCacheBlocks] = {}
++        num_scheduled_tokens: dict[str, int] = {}
++        token_budget = self.max_num_scheduled_tokens
++        scheduled_timestamp = time.monotonic()
++        self.kv_cache_manager.new_step_starts()
++        kv_allocation_failed = False
++
++        chosen_total_tokens = sum(int(v.l_q) for v in chosen)
++        kv_evict_info = {
++            "n_dropped_waiting_kv": 0,
++            "n_preempted_kv_unchosen": 0,
++            "n_preempted_kv_chosen": 0,
++            "free_blocks_before": free_blocks_before_solve,
++            "kv_needed": 0,
++            "free_blocks_after": free_blocks_before_solve,
++            "preempted_reqs": [],
++        }
++        solver_chose_empty = not chosen
++
++        if not chosen:
++            # Nothing to schedule — return empty output
++            f_star_used = (self._esolver.freq_candidates[-1]
++                           if self._esolver.freq_candidates else 1410)
++            self._efreq.set_frequency(int(f_star_used))
++
++        if chosen:
++            # Phase 3 — classify chosen into running vs waiting
++            waiting_set = set(self.waiting)
++            chosen_run = [v for v in chosen if v.handle not in waiting_set]
++            chosen_wait = [v for v in chosen if v.handle in waiting_set]
++
++            # Phase 4 — schedule chosen RUNNING requests
++            for v in chosen_run:
++                req = v.handle
++                request_id = req.request_id
++                num_new_tokens = int(v.l_q)
++                num_new_tokens = min(
++                    num_new_tokens,
++                    self.max_model_len - 1 - req.num_computed_tokens)
++                if num_new_tokens <= 0:
++                    continue
++                if num_new_tokens > token_budget:
++                    continue
++
++                new_blocks = self.kv_cache_manager.allocate_slots(
++                    req, num_new_tokens,
++                    num_lookahead_tokens=self.num_lookahead_tokens)
++
++                if new_blocks is None:
++                    kv_allocation_failed = True
++                    continue
++
++                scheduled_running_reqs.append(req)
++                req_to_new_blocks[request_id] = new_blocks
++                num_scheduled_tokens[request_id] = num_new_tokens
++                token_budget -= num_new_tokens
++                self._elast_exec[request_id] = now_ms
++
++            # Phase 5 — admit chosen WAITING requests.  max_num_seqs is an
++            # admission cap only; it never triggers preemption.
++            preempted_this_step = set(r.request_id for r in preempted_reqs)
++            admitted_waiting = 0
++            for v in chosen_wait:
++                if len(self.running) >= self.max_num_running_reqs:
++                    break
++                if admitted_waiting >= waiting_capacity:
++                    break
++                req = v.handle
++                request_id = req.request_id
++                if request_id in preempted_this_step:
++                    continue
++
++                new_computed_blocks, num_computed = (
++                    self.kv_cache_manager.get_computed_blocks(req))
++                num_new_tokens = int(v.l_q)
++                num_new_tokens = min(
++                    num_new_tokens, req.num_tokens - num_computed)
++                if num_new_tokens <= 0:
++                    continue
++                if not self.scheduler_config.enable_chunked_prefill \
++                        and num_new_tokens > token_budget:
++                    break
++                num_new_tokens = min(num_new_tokens, token_budget)
++                if num_new_tokens <= 0:
++                    break
++
++                new_blocks = self.kv_cache_manager.allocate_slots(
++                    req, num_new_tokens,
++                    num_new_computed_tokens=num_computed,
++                    new_computed_blocks=new_computed_blocks,
++                    num_lookahead_tokens=(
++                        0 if req.num_computed_tokens == 0
++                        else self.num_lookahead_tokens),
++                )
++
++                if new_blocks is None:
++                    kv_allocation_failed = True
++                    break
++
++                self.waiting.remove_request(req)
++                self.running.append(req)
++                if self.log_stats:
++                    req.record_event(
++                        EngineCoreEventType.SCHEDULED, scheduled_timestamp)
++
++                if req.status == RequestStatus.WAITING:
++                    scheduled_new_reqs.append(req)
++                elif req.status == RequestStatus.PREEMPTED:
++                    scheduled_resumed_reqs.append(req)
++
++                req_to_new_blocks[request_id] = (
++                    self.kv_cache_manager.get_blocks(request_id))
++                num_scheduled_tokens[request_id] = num_new_tokens
++                token_budget -= num_new_tokens
++                req.status = RequestStatus.RUNNING
++                req.num_computed_tokens = num_computed
++                if req.num_cached_tokens < 0:
++                    req.num_cached_tokens = num_computed
++                self._elast_exec[request_id] = now_ms
++                admitted_waiting += 1
++
++            # Phase 6 — set frequency AFTER batch confirmed
++            if num_scheduled_tokens:
++                self._efreq.set_frequency(int(f_star))
++            else:
++                self._efreq.set_frequency(
++                    self._esolver.freq_candidates[-1]
++                    if self._esolver.freq_candidates else 1410)
++
++        # Phase 7 — emergency preemption only for KV deadlock.  Do not retry
++        # scheduling in the same step; the next iteration will see freed KV.
++        if not num_scheduled_tokens and self.running:
++            kv_deadlock = kv_allocation_failed or (
++                solver_chose_empty and effective_Lmax <= 0)
++            if kv_deadlock:
++                victim = min(
++                    self.running, key=lambda r: r.num_computed_tokens)
++                self.running.remove(victim)
++                self._preempt_request(victim, scheduled_timestamp)
++                preempted_reqs.append(victim)
++                vid = victim.request_id
++                self._epreempt_cooldown[vid] = now_ms
++                self._elast_exec.pop(vid, None)
++                self._ereq_state.pop(vid, None)
++                f_star = (self._esolver.freq_candidates[-1]
++                          if self._esolver.freq_candidates else 1410)
++                self._efreq.set_frequency(int(f_star))
++
++        # Phase 8 — construct SchedulerOutput
++        total_num_scheduled_tokens = sum(num_scheduled_tokens.values())
++        assert total_num_scheduled_tokens <= self.max_num_scheduled_tokens
++        assert len(self.running) <= self.max_num_running_reqs
++        if block_pool is not None:
++            kv_evict_info["free_blocks_after"] = block_pool.get_num_free_blocks()
++
++        num_common_prefix_blocks = [0] * len(
++            self.kv_cache_config.kv_cache_groups)
++        if self.running:
++            any_request_id = self.running[0].request_id
++            num_common_prefix_blocks = (
++                self.kv_cache_manager.get_num_common_prefix_blocks(
++                    any_request_id))
++
++        if self.use_v2_model_runner:
++            scheduled_new_reqs = scheduled_new_reqs + scheduled_resumed_reqs
++            scheduled_resumed_reqs = []
++            new_reqs_data = [
++                NewRequestData.from_request(
++                    req,
++                    req_to_new_blocks[req.request_id].get_block_ids(),
++                    req._all_token_ids,
++                )
++                for req in scheduled_new_reqs
++            ]
++        else:
++            new_reqs_data = [
++                NewRequestData.from_request(
++                    req,
++                    req_to_new_blocks[req.request_id].get_block_ids(),
++                )
++                for req in scheduled_new_reqs
++            ]
++
++        cached_reqs_data = self._make_cached_request_data(
++            scheduled_running_reqs,
++            scheduled_resumed_reqs,
++            num_scheduled_tokens,
++            {},
++            req_to_new_blocks,
++        )
++
++        self.prev_step_scheduled_req_ids.clear()
++        self.prev_step_scheduled_req_ids.update(num_scheduled_tokens.keys())
++
++        new_block_ids_to_zero = (
++            (self.kv_cache_manager.take_new_block_ids() or None)
++            if self.needs_kv_cache_zeroing
++            else None
++        )
++
++        scheduler_output = SchedulerOutput(
++            scheduled_new_reqs=new_reqs_data,
++            scheduled_cached_reqs=cached_reqs_data,
++            num_scheduled_tokens=num_scheduled_tokens,
++            total_num_scheduled_tokens=total_num_scheduled_tokens,
++            scheduled_spec_decode_tokens={},
++            scheduled_encoder_inputs={},
++            num_common_prefix_blocks=num_common_prefix_blocks,
++            preempted_req_ids={r.request_id for r in preempted_reqs},
++            finished_req_ids=self.finished_req_ids,
++            free_encoder_mm_hashes=(
++                self.encoder_cache_manager.get_freed_mm_hashes()),
++            new_block_ids_to_zero=new_block_ids_to_zero,
++        )
++
++        if self.connector is not None:
++            meta = self._build_kv_connector_meta(
++                self.connector, scheduler_output)
++            scheduler_output.kv_connector_metadata = meta
++        if self.ec_connector is not None:
++            ec_meta = self.ec_connector.build_connector_meta(
++                scheduler_output)
++            scheduler_output.ec_connector_metadata = ec_meta
++
++        self._update_after_schedule(scheduler_output)
++
++        # Phase 9 — logging
++        n_prefill = sum(1 for v in chosen if v.is_prefill)
++        n_decode = len(chosen) - n_prefill
++        final_chosen_total_tokens = sum(int(v.l_q) for v in chosen)
++
++        if self._elog is not None:
++            if self._eprev_record is not None and exec_ms is not None:
++                self._eprev_record["exec_ms"] = exec_ms
++                self._elog.write(_json.dumps(self._eprev_record) + "\n")
++                self._elog.flush()
++            if chosen or not solver_chose_empty or preempted_reqs:
++                self._eprev_record = {
++                    "iter": self._eiter,
++                    "solve_ms": solve_ms,
++                    "batch_size": len(chosen),
++                    "n_prefill": n_prefill,
++                    "n_decode": n_decode,
++                    "n_preempted": len(preempted_reqs),
++                    "n_preempted_kv_unchosen": kv_evict_info["n_preempted_kv_unchosen"],
++                    "n_preempted_kv_chosen": kv_evict_info["n_preempted_kv_chosen"],
++                    "n_dropped_waiting_kv": kv_evict_info["n_dropped_waiting_kv"],
++                    "free_blocks_before": kv_evict_info["free_blocks_before"],
++                    "kv_needed": kv_evict_info["kv_needed"],
++                    "free_blocks_after": kv_evict_info["free_blocks_after"],
++                    "f_star": int(f_star),
++                    "et_pred_ms": et_pred,
++                    "w_ttft": w_ttft_now,
++                    "w_tpot": w_tpot_now,
++                    "ttft_updates": n_ttft_upd,
++                    "tpot_updates": n_tpot_upd,
++                    "len_waiting_before": len_waiting_before,
++                    "len_running_before": len_running_before,
++                    "effective_Lmax": effective_Lmax,
++                    "waiting_capacity": waiting_capacity,
++                    "cooldown_size": len(self._epreempt_cooldown),
++                    "cooldown_released": cooldown_released,
++                    "solver_chosen_total_tokens": chosen_total_tokens,
++                    "final_chosen_total_tokens": final_chosen_total_tokens,
++                    "actual_total_tokens": total_num_scheduled_tokens,
++                }
++            else:
++                self._eprev_record = None
++
++        self._eiter += 1
++        self._eprev_exit_t = time.monotonic()
++
++        if self._elog is not None \
++                and self._eiter % self._ecfg.log_every_n == 0:
++            exec_str = f"{exec_ms:.2f}" if exec_ms else "N/A"
++            import sys
++            print(
++                f"[energy_sched] iter={self._eiter} f*={int(f_star)} "
++                f"|B|={len(chosen)}(p={n_prefill}d={n_decode}) "
++                f"total_tok={total_num_scheduled_tokens} "
++                f"solve={solve_ms:.2f}ms exec={exec_str}ms "
++                f"w_ttft={w_ttft_now:.3f} w_tpot={w_tpot_now:.3f}",
++                file=sys.stderr, flush=True)
++
++        return scheduler_output
++
++    def _energy_release_preempt_cooldowns(self, now_ms: float) -> int:
++        if not self._epreempt_cooldown:
++            return 0
++
++        waiting_by_id = {req.request_id: req for req in self.waiting}
++        running_ids = {req.request_id for req in self.running}
++        released = 0
++
++        for rid, preempt_ms in list(self._epreempt_cooldown.items()):
++            req = waiting_by_id.get(rid)
++            if req is None:
++                # Stale entry: request was aborted, finished, or resumed by
++                # another path.  Keep vLLM's standard queues authoritative.
++                self._epreempt_cooldown.pop(rid, None)
++                continue
++
++            ttft_ms, _, _ = self._energy_extract_slos(req)
++            if now_ms - preempt_ms >= ttft_ms:
++                self._epreempt_cooldown.pop(rid, None)
++                released += 1
++
++        return released
++
++    def _energy_build_views(self, now_ms: float) -> list:
++        from vllm.energy_sched.solver import ReqView
++
++        views: list[ReqView] = []
++        cfg = self._ecfg
++        chunked = cfg.chunked_prefill
++
++        for req in self.waiting:
++            if req.request_id in self._epreempt_cooldown:
++                continue
++            sp = getattr(req, "sampling_params", None)
++            ea = getattr(sp, "extra_args", {}) if sp else {}
++            if not isinstance(ea, dict):
++                ea = {}
++            ttft = float(ea.get("ttft_ms", cfg.default_ttft_ms))
++            w_n = float(ea.get("w_n", cfg.default_w_n))
++            arrival_ms = self._energy_get_arrival(req, now_ms)
++            wait_ms = now_ms - arrival_ms
++            l_q = getattr(req, "num_prompt_tokens", 0) or req.num_tokens
++            views.append(ReqView(
++                handle=req, is_prefill=True, l_q=l_q, l_kv=0,
++                wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n,
++                is_waiting=True))
++
++        for req in self.running:
++            sp = getattr(req, "sampling_params", None)
++            ea = getattr(sp, "extra_args", {}) if sp else {}
++            if not isinstance(ea, dict):
++                ea = {}
++            ttft = float(ea.get("ttft_ms", cfg.default_ttft_ms))
++            tpot = float(ea.get("tpot_ms", cfg.default_tpot_ms))
++            w_n = float(ea.get("w_n", cfg.default_w_n))
++            num_prompt = getattr(req, "num_prompt_tokens", 0)
++            num_computed = getattr(req, "num_computed_tokens", 0)
++
++            if chunked and num_computed < num_prompt:
++                remaining = num_prompt - num_computed
++                arrival_ms = self._energy_get_arrival(req, now_ms)
++                wait_ms = now_ms - arrival_ms
++                views.append(ReqView(
++                    handle=req, is_prefill=True,
++                    l_q=remaining, l_kv=num_computed,
++                    wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n))
++            else:
++                rid = req.request_id
++                last_exec = self._elast_exec.get(rid)
++                if last_exec is not None:
++                    wait_ms = now_ms - last_exec
++                else:
++                    wait_ms = now_ms - self._energy_get_arrival(req, now_ms)
++                views.append(ReqView(
++                    handle=req, is_prefill=False,
++                    l_q=1, l_kv=num_computed,
++                    wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n))
++
++        return views
++
++    def _energy_get_arrival(self, req, now_ms: float) -> float:
++        sp = getattr(req, "sampling_params", None)
++        ea = getattr(sp, "extra_args", {}) if sp else {}
++        if isinstance(ea, dict):
++            st = ea.get("send_time")
++            if st is not None:
++                return float(st) * 1000.0
++        if hasattr(req, "arrival_time") and req.arrival_time is not None:
++            return float(req.arrival_time) * 1000.0
++        return now_ms
++
++    def _energy_extract_slos(self, req):
++        sp = getattr(req, "sampling_params", None)
++        ea = getattr(sp, "extra_args", {}) if sp else {}
++        if not isinstance(ea, dict):
++            ea = {}
++        ttft = float(ea.get("ttft_ms", self._ecfg.default_ttft_ms))
++        tpot = float(ea.get("tpot_ms", self._ecfg.default_tpot_ms))
++        w_n = float(ea.get("w_n", self._ecfg.default_w_n))
++        return ttft, tpot, w_n
++
++    def _energy_ensure_req_state(self, rid, req, now_ms: float):
++        if rid in self._ereq_state:
++            return
++        ttft_slo, tpot_slo, w_n = self._energy_extract_slos(req)
++        arrival_ms = self._energy_get_arrival(req, now_ms)
++        self._ereq_state[rid] = {
++            "arrival_ms": arrival_ms,
++            "w_n": w_n,
++            "ttft_slo_ms": ttft_slo,
++            "tpot_slo_ms": tpot_slo,
++            "ttft_fired": False,
++            "first_tok_ms": None,
++            "last_num_out": 0,
++        }
++
++    def _energy_update_weights(self, now_ms: float):
++        cfg = self._ecfg
++        visible_ids: set[str] = set()
++        running_view = []
++        for req in self.running:
++            rid = req.request_id
++            visible_ids.add(rid)
++            running_view.append((rid, req))
++            self._energy_ensure_req_state(rid, req, now_ms)
++        for req in self.waiting:
++            rid = req.request_id
++            visible_ids.add(rid)
++            self._energy_ensure_req_state(rid, req, now_ms)
++
++        n_ttft = 0
++        for rid, req in running_view:
++            st = self._ereq_state[rid]
++            n_out = int(getattr(req, "num_output_tokens", 0))
++            st["last_num_out"] = n_out
++            if n_out >= 1 and not st["ttft_fired"]:
++                ttft_obs_ms = now_ms - st["arrival_ms"]
++                slo = max(st["ttft_slo_ms"], 1e-6)
++                delta = cfg.eta_ttft * st["w_n"] * (ttft_obs_ms / slo - 1.0)
++                cfg.w_ttft = max(0.0, cfg.w_ttft + delta)
++                st["ttft_fired"] = True
++                st["first_tok_ms"] = now_ms
++                n_ttft += 1
++
++        n_tpot = 0
++        disappeared = list(set(self._ereq_state.keys()) - visible_ids)
++        for rid in disappeared:
++            st = self._ereq_state.pop(rid)
++            if not st["ttft_fired"] or st["first_tok_ms"] is None:
++                continue
++            n_decode_tokens = max(0, st["last_num_out"] - 1)
++            if n_decode_tokens <= 0:
++                continue
++            avg_tpot_obs_ms = (now_ms - st["first_tok_ms"]) / n_decode_tokens
++            slo = max(st["tpot_slo_ms"], 1e-6)
++            delta = cfg.eta_tpot * st["w_n"] * (avg_tpot_obs_ms / slo - 1.0)
++            cfg.w_tpot = max(0.01, cfg.w_tpot + delta)
++            n_tpot += 1
++
++        return n_ttft, n_tpot
++
+     def _build_kv_connector_meta(
+         self, connector: KVConnectorBase_V1, scheduler_output: SchedulerOutput
+     ) -> KVConnectorMetadata:
+@@ -969,6 +1511,7 @@ class Scheduler(SchedulerInterface):
+         if request.spec_token_ids:
+             request.spec_token_ids = []
+         request.num_preemptions += 1
++        self.prev_step_scheduled_req_ids.discard(request.request_id)
+         if self.log_stats:
+             request.record_event(EngineCoreEventType.PREEMPTED, timestamp)
+ 

@@ -12,6 +12,8 @@ METRIC_ORDER = [
     "mean_tpot_ms",
     "mean_ttft_violation_ms",
     "mean_tpot_violation_ms",
+    "mean_normalized_ttft_violation",
+    "mean_normalized_tpot_violation",
     "ttft_slo_attainment",
     "tpot_slo_attainment",
     "mean_power_w",

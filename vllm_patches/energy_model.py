@@ -9,15 +9,26 @@ from typing import Sequence, Tuple
 
 @dataclass
 class LatencyParams:
-    a_p: float = 4.791065541701025e-03
-    b_p: float = 0.0
-    c_p: float = 1.3650620923913607e+02
-    w_pf: float = 1.4999985410892014e+04
-    w_dec: float = 1.4999998752209698e+04
-    a_d: float = 1.9294172833774345e-01
-    b_d: float = 5.0502340019606976e+01
-    alpha: float = 0.9735669988793928
-    t_c: float = 4.652569884043852
+    # # --- previous fit ---
+    #a_p: float = 4.791065541701025e-03
+    #b_p: float = 0.0
+    #c_p: float = 1.3650620923913607e+02
+    #w_pf: float = 1.4999985410892014e+04
+    #w_dec: float = 1.4999998752209698e+04
+    #a_d: float = 1.9294172833774345e-01
+    #b_d: float = 5.0502340019606976e+01
+    #alpha: float = 0.9735669988793928
+    #t_c: float = 4.652569884043852
+    # # --- new fit ---
+    a_p: float = 0.0000e+00
+    b_p: float = 6.0000e-03
+    c_p: float = 1.4555e+02
+    w_pf: float = 5.0002e+03
+    w_dec: float = 1.5000e+04
+    a_d: float = 1.6748e-01
+    b_d: float = 1.0264e+02
+    alpha: float = 9.8808e-01
+    t_c: float = 6.5821e+00
 
     @classmethod
     def from_json(cls, path: str) -> "LatencyParams":

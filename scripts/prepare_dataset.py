@@ -23,7 +23,7 @@ OUTPUT = "trace.jsonl"
 NUM_REQUESTS = 400
 # Number of requests to sample into the trace.
 
-RATE_QPS = 4
+RATE_QPS = 2.0
 # Arrival rate in requests/second. Record i arrives at time i / RATE_QPS.
 
 TTFT_MEAN_MS = 4000.0
@@ -45,9 +45,9 @@ MAX_OUTPUT_TOKENS = 1024
 # Maximum number of output tokens per request (uniformly sampled).
 
 MIN_PROMPT_CHARS = 512
-# Minimum prompt length in characters (filter out very short prompts).
+# Minimum prompt length in characters (filter out short prompts).
 
-MAX_PROMPT_CHARS = 8000
+MAX_PROMPT_CHARS = 6000
 # Maximum prompt length in characters (filter out very long prompts).
 
 SEED = 42

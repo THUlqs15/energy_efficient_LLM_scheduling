@@ -57,6 +57,9 @@ async def send_one(
             "prompt": record["prompt"],
             "max_tokens": record["max_tokens"],
             "temperature": 0,
+            "top_p": 1.0,
+            "top_k": -1,
+            "min_p": 0.0,
             "stream": True,
             "vllm_xargs": {
                 "ttft_ms": record["ttft_ms"],
@@ -118,7 +121,7 @@ async def main():
     p.add_argument("--endpoint", default="http://localhost:8000/v1/completions")
     p.add_argument("--model", default="default")
     p.add_argument("--output", default="results.jsonl")
-    p.add_argument("--max-concurrency", type=int, default=256)
+    p.add_argument("--max-concurrency", type=int, default=500)
     args = p.parse_args()
 
     records = []

@@ -110,6 +110,22 @@ def main():
     tpot_violations = [max(0.0, r["tpot_ms"] - r["tpot_slo_ms"]) for r in valid_tpot]
     mean_ttft_viol = sum(ttft_violations) / len(ttft_violations) if ttft_violations else 0.0
     mean_tpot_viol = sum(tpot_violations) / len(tpot_violations) if tpot_violations else 0.0
+    normalized_ttft_violations = [
+        max(0.0, r["ttft_ms"] - r["ttft_slo_ms"]) / max(r["ttft_slo_ms"], 1e-6)
+        for r in valid_ttft
+    ]
+    normalized_tpot_violations = [
+        max(0.0, r["tpot_ms"] - r["tpot_slo_ms"]) / max(r["tpot_slo_ms"], 1e-6)
+        for r in valid_tpot
+    ]
+    mean_normalized_ttft_viol = (
+        sum(normalized_ttft_violations) / len(normalized_ttft_violations)
+        if normalized_ttft_violations else 0.0
+    )
+    mean_normalized_tpot_viol = (
+        sum(normalized_tpot_violations) / len(normalized_tpot_violations)
+        if normalized_tpot_violations else 0.0
+    )
 
     ttft_attain = sum(1 for v in ttft_violations if v == 0.0) / len(ttft_violations) if ttft_violations else 0.0
     tpot_attain = sum(1 for v in tpot_violations if v == 0.0) / len(tpot_violations) if tpot_violations else 0.0
@@ -154,6 +170,8 @@ def main():
         "mean_tpot_ms": round(mean_tpot, 2),
         "mean_ttft_violation_ms": round(mean_ttft_viol, 2),
         "mean_tpot_violation_ms": round(mean_tpot_viol, 2),
+        "mean_normalized_ttft_violation": round(mean_normalized_ttft_viol, 6),
+        "mean_normalized_tpot_violation": round(mean_normalized_tpot_viol, 6),
         "ttft_slo_attainment": round(ttft_attain, 4),
         "tpot_slo_attainment": round(tpot_attain, 4),
         "mean_power_w": round(mean_power, 2),
