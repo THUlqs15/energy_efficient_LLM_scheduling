@@ -2,7 +2,7 @@ diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
 index fe524ccac..facf3b4d6 100644
 --- a/vllm/v1/core/sched/scheduler.py
 +++ b/vllm/v1/core/sched/scheduler.py
-@@ -295,6 +295,52 @@ class Scheduler(SchedulerInterface):
+@@ -295,6 +295,54 @@ class Scheduler(SchedulerInterface):
  
          self._pause_state: PauseState = PauseState.UNPAUSED
  
@@ -43,10 +43,12 @@ index fe524ccac..facf3b4d6 100644
 +            self._elast_exec: dict[str, float] = {}
 +            self._ereq_state: dict[str, dict] = {}
 +            self._epreempt_cooldown: dict[str, float] = {}
++            self._epreempt_multiplier: dict[str, float] = {}
 +            import sys
 +            print("[energy_sched] Embedded energy scheduler initialised "
 +                  f"(mode={self._ecfg.solution_mode}, "
 +                  f"beta={self._ecfg.beta}, "
++                  f"preempt_mode={self._ecfg.preempt_mode}, "
 +                  f"Lmax={self._ecfg.Lmax}, "
 +                  f"Bmax={self._ecfg.max_batch_size}, "
 +                  f"|F|={len(cands)})",
@@ -55,7 +57,7 @@ index fe524ccac..facf3b4d6 100644
      def _mamba_block_aligned_split(
          self,
          request: Request,
-@@ -346,6 +392,9 @@ class Scheduler(SchedulerInterface):
+@@ -346,6 +394,9 @@ class Scheduler(SchedulerInterface):
          return num_new_tokens
  
      def schedule(self) -> SchedulerOutput:
@@ -65,7 +67,7 @@ index fe524ccac..facf3b4d6 100644
          # NOTE(woosuk) on the scheduling algorithm:
          # There's no "decoding phase" nor "prefill phase" in the scheduler.
          # Each request just has the num_computed_tokens and
-@@ -948,6 +997,499 @@ class Scheduler(SchedulerInterface):
+@@ -948,6 +999,524 @@ class Scheduler(SchedulerInterface):
              self._update_after_schedule(scheduler_output)
          return scheduler_output
  
@@ -233,6 +235,7 @@ index fe524ccac..facf3b4d6 100644
 +                req.num_computed_tokens = num_computed
 +                if req.num_cached_tokens < 0:
 +                    req.num_cached_tokens = num_computed
++                self._epreempt_multiplier.pop(request_id, None)
 +                self._elast_exec[request_id] = now_ms
 +                admitted_waiting += 1
 +
@@ -256,7 +259,15 @@ index fe524ccac..facf3b4d6 100644
 +                self._preempt_request(victim, scheduled_timestamp)
 +                preempted_reqs.append(victim)
 +                vid = victim.request_id
-+                self._epreempt_cooldown[vid] = now_ms
++                if self._ecfg.preempt_mode == 1:
++                    self._epreempt_cooldown[vid] = now_ms
++                elif self._ecfg.preempt_mode == 2:
++                    decay = max(float(self._ecfg.preempt_decay_parameter), 1.0)
++                    prev = self._epreempt_multiplier.get(vid, 1.0)
++                    min_mult = max(
++                        float(self._ecfg.preempt_min_multiplier), 0.0)
++                    self._epreempt_multiplier[vid] = max(
++                        prev / decay, min_mult)
 +                self._elast_exec.pop(vid, None)
 +                self._ereq_state.pop(vid, None)
 +                f_star = (self._esolver.freq_candidates[-1]
@@ -377,6 +388,11 @@ index fe524ccac..facf3b4d6 100644
 +                    "waiting_capacity": waiting_capacity,
 +                    "cooldown_size": len(self._epreempt_cooldown),
 +                    "cooldown_released": cooldown_released,
++                    "preempt_mode": self._ecfg.preempt_mode,
++                    "preempt_decay_size": len(self._epreempt_multiplier),
++                    "preempt_min_multiplier": (
++                        min(self._epreempt_multiplier.values())
++                        if self._epreempt_multiplier else 1.0),
 +                    "solver_chosen_total_tokens": chosen_total_tokens,
 +                    "final_chosen_total_tokens": final_chosen_total_tokens,
 +                    "actual_total_tokens": total_num_scheduled_tokens,
@@ -402,6 +418,9 @@ index fe524ccac..facf3b4d6 100644
 +        return scheduler_output
 +
 +    def _energy_release_preempt_cooldowns(self, now_ms: float) -> int:
++        if self._ecfg.preempt_mode != 1:
++            self._epreempt_cooldown.clear()
++            return 0
 +        if not self._epreempt_cooldown:
 +            return 0
 +
@@ -432,14 +451,16 @@ index fe524ccac..facf3b4d6 100644
 +        chunked = cfg.chunked_prefill
 +
 +        for req in self.waiting:
-+            if req.request_id in self._epreempt_cooldown:
++            if (self._ecfg.preempt_mode == 1
++                    and req.request_id in self._epreempt_cooldown):
 +                continue
 +            sp = getattr(req, "sampling_params", None)
 +            ea = getattr(sp, "extra_args", {}) if sp else {}
 +            if not isinstance(ea, dict):
 +                ea = {}
 +            ttft = float(ea.get("ttft_ms", cfg.default_ttft_ms))
-+            w_n = float(ea.get("w_n", cfg.default_w_n))
++            w_n = self._energy_effective_w_n(
++                req.request_id, float(ea.get("w_n", cfg.default_w_n)))
 +            arrival_ms = self._energy_get_arrival(req, now_ms)
 +            wait_ms = now_ms - arrival_ms
 +            l_q = getattr(req, "num_prompt_tokens", 0) or req.num_tokens
@@ -480,6 +501,11 @@ index fe524ccac..facf3b4d6 100644
 +                    wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n))
 +
 +        return views
++
++    def _energy_effective_w_n(self, request_id: str, original_w_n: float) -> float:
++        if self._ecfg.preempt_mode != 2:
++            return original_w_n
++        return original_w_n * self._epreempt_multiplier.get(request_id, 1.0)
 +
 +    def _energy_get_arrival(self, req, now_ms: float) -> float:
 +        sp = getattr(req, "sampling_params", None)
@@ -549,6 +575,7 @@ index fe524ccac..facf3b4d6 100644
 +        disappeared = list(set(self._ereq_state.keys()) - visible_ids)
 +        for rid in disappeared:
 +            st = self._ereq_state.pop(rid)
++            self._epreempt_multiplier.pop(rid, None)
 +            if not st["ttft_fired"] or st["first_tok_ms"] is None:
 +                continue
 +            n_decode_tokens = max(0, st["last_num_out"] - 1)
@@ -565,7 +592,7 @@ index fe524ccac..facf3b4d6 100644
      def _build_kv_connector_meta(
          self, connector: KVConnectorBase_V1, scheduler_output: SchedulerOutput
      ) -> KVConnectorMetadata:
-@@ -969,6 +1511,7 @@ class Scheduler(SchedulerInterface):
+@@ -969,6 +1538,7 @@ class Scheduler(SchedulerInterface):
          if request.spec_token_ids:
              request.spec_token_ids = []
          request.num_preemptions += 1

@@ -49,11 +49,12 @@ bash main.sh
 | `BETA` | `3.0` | Energy-utility trade-off (larger = more energy-saving) |
 | `W_TTFT` | `2000.0` | Initial weight for TTFT in priority calculation (mutable — drifts online) |
 | `W_TPOT` | `1.0` | Initial weight for TPOT in priority calculation (mutable — drifts online) |
-| `ETA_MS` | `200` | Per-iteration time budget η (ms); accepted for compat but currently unused by solver |
 | `VLLM_MAX_BATCHED_TOKENS` | `8192` | Passed to vLLM `--max-num-batched-tokens`; must be ≥ MAX_MODEL_LEN |
 | `SOLVER_LMAX` | `8192` | Solver-side max tokens per batch in greedy fill (can differ from vLLM batched tokens) |
 | `FREQ_STRIDE` | `3` | Stride for frequency candidate subsampling |
 | `MAX_BATCH_SIZE` | `256` | Max requests per iteration (batch cap) |
+| `IS_COOLDOWN` | `1` | Preemption handling: 1=TTFT-SLO cooldown, 2=effective `w_n` decay |
+| `DECAY_PARAMETER` | `100` | Only for `IS_COOLDOWN=2`; each preemption divides the request multiplier by this value |
 | `SOLUTION_MODE` | `3` | Solver heuristic (1=H2 freq-indep priority, 2=H3 freq-dep priority, 3=H4 freq-dep with normalization) |
 | `IS_CHUNKED_PREFILL` | `1` | 0=non-chunked prefill, 1=chunked prefill |
 | `POWER_INTERVAL_S` | `0.1` | GPU power sampling interval (seconds) |
@@ -71,7 +72,7 @@ bash main.sh
 **L168–296: `run_experiment()` function** — The core experiment runner:
 
 - **L169–174**: Maps `"default"`/`"custom"` label to the output file suffix.
-- **L180–198**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0`. For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, `VLLM_ENERGY_W_TPOT`, `VLLM_ENERGY_LMAX`, `VLLM_ENERGY_MAX_BATCH_SIZE`, `VLLM_ENERGY_FREQ_STRIDE`, `VLLM_ENERGY_SOLUTION_MODE`, `VLLM_ENERGY_ETA_MS`, `VLLM_ENERGY_GPU_INDEX`, `VLLM_ENERGY_ITER_LOG`, `VLLM_ENERGY_CHUNKED_PREFILL`).
+- **L180–198**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0`. For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, `VLLM_ENERGY_W_TPOT`, `VLLM_ENERGY_LMAX`, `VLLM_ENERGY_MAX_BATCH_SIZE`, `VLLM_ENERGY_PREEMPT_MODE`, `VLLM_ENERGY_PREEMPT_DECAY_PARAMETER`, `VLLM_ENERGY_PREEMPT_MIN_MULTIPLIER`, `VLLM_ENERGY_FREQ_STRIDE`, `VLLM_ENERGY_SOLUTION_MODE`, `VLLM_ENERGY_GPU_INDEX`, `VLLM_ENERGY_ITER_LOG`, `VLLM_ENERGY_CHUNKED_PREFILL`).
 - **L206–233**: Launches the vLLM server as a background process. Selects `DEFAULT_MAX_NUM_SEQS` or `CUSTOM_MAX_NUM_SEQS` depending on mode. Key flags:
   - `--enforce-eager`: Disables CUDA graphs (needed because frequency changes invalidate graph caches)
   - `--no-async-scheduling`: Disables async scheduling so the scheduler sees all running/waiting requests at each iteration
@@ -107,8 +108,10 @@ bash main.sh
 | `RATE_QPS` | `4` | Arrival rate — request i arrives at `i / RATE_QPS` seconds |
 | `TTFT_MEAN_MS` | `4000.0` | Mean TTFT SLO target (ms) |
 | `TTFT_STD_MS` | `800.0` | Std dev of TTFT SLO |
+| `TTFT_MIN_MS` | `1000.0` | Lower bound for TTFT SLO sampling (ms) |
 | `TPOT_MEAN_MS` | `100.0` | Mean TPOT SLO target (ms) |
 | `TPOT_STD_MS` | `40.0` | Std dev of TPOT SLO |
+| `TPOT_MIN_MS` | `40.0` | Lower bound for TPOT SLO sampling (ms) |
 | `MIN_OUTPUT_TOKENS` / `MAX_OUTPUT_TOKENS` | `64` / `1024` | Output token range |
 | `MIN_PROMPT_CHARS` / `MAX_PROMPT_CHARS` | `512` / `8000` | Prompt length filter (characters) |
 | `SEED` | `42` | Random seed for reproducibility |
@@ -119,7 +122,7 @@ bash main.sh
 - If `DATASET_DIR` doesn't exist, downloads via `huggingface_hub.snapshot_download()`.
 - Checks each `.json` file for Git LFS pointer signatures (file size < 200 bytes, content starts with `version `). If detected, removes and re-downloads.
 
-**L86–90: `truncated_normal()`**: Samples from a Gaussian distribution and rejects values ≤ `low`. Used to generate TTFT/TPOT SLO targets that are always positive.
+**L86–90: `truncated_normal()`**: Samples from a Gaussian distribution and rejects values ≤ `low`. TTFT and TPOT use separate lower bounds (`TTFT_MIN_MS`, `TPOT_MIN_MS`) to avoid unrealistically tight SLO samples.
 
 **L93–112: Dataset loading**:
 - Iterates all `.json` files in `DATASET_DIR`.
@@ -382,19 +385,20 @@ def schedule(self) -> SchedulerOutput:
 | 4 | Schedule chosen RUNNING requests (direct `allocate_slots`, token_budget tracking; skip on allocation failure) |
 | 5 | Admit chosen WAITING requests: respects `waiting_capacity` and `max_num_running_reqs` as admission cap only (never triggers preemption); calls `get_computed_blocks` + `allocate_slots` |
 | 6 | Set GPU frequency AFTER batch confirmed (max freq if nothing scheduled) |
-| 7 | Emergency preemption: only triggers on KV deadlock (allocation failed AND nothing scheduled AND running queue non-empty); preempts lowest-progress request and adds to `_epreempt_cooldown` — does NOT retry scheduling in the same step |
+| 7 | Emergency preemption: only triggers on KV deadlock (allocation failed AND nothing scheduled AND running queue non-empty); preempts lowest-progress request, then either applies cooldown (`IS_COOLDOWN=1`) or decays its scheduler-local priority multiplier (`IS_COOLDOWN=2`) — does NOT retry scheduling in the same step |
 | 8 | Construct `SchedulerOutput` (handles `use_v2_model_runner`, calls `_update_after_schedule`) |
 | 9 | Logging + increment `_eiter` |
 
 **Key design principles**:
 - **Admission-only cap**: `max_num_running_reqs` is respected as an admission gate — waiting requests are not admitted beyond this cap, but running requests are never preempted to make room for new admissions.
 - **KV-aware Lmax**: `effective_Lmax = min(solver_Lmax, 0.95 × free_kv_tokens)` prevents the solver from choosing a batch that cannot be allocated.
-- **Preempt cooldown**: Preempted requests enter `_epreempt_cooldown` and are excluded from `_energy_build_views` until their TTFT SLO duration has elapsed. This prevents preempt→re-admit→preempt thrashing.
+- **Preempt handling**: `IS_COOLDOWN=1` preserves the original behavior: preempted requests enter `_epreempt_cooldown` and are excluded from `_energy_build_views` until their TTFT SLO duration has elapsed. `IS_COOLDOWN=2` keeps preempted requests visible in the waiting queue, but uses `effective_w_n = original_w_n × preempt_multiplier`; each preemption divides that multiplier by `DECAY_PARAMETER`, with a lower bound of `1/10000`.
 - **Single `allocate_slots` per request**: No double KV check.
 - **GPU frequency set AFTER batch confirmed**: Not before.
 
 **Helper methods**:
-- `_energy_build_views(now_ms)`: Converts vLLM requests to `ReqView`. Sets `is_waiting=True` for waiting requests. Skips requests in `_epreempt_cooldown`. Handles partial-prefill (chunked) running requests.
+- `_energy_build_views(now_ms)`: Converts vLLM requests to `ReqView`. Sets `is_waiting=True` for waiting requests. In cooldown mode, skips requests in `_epreempt_cooldown`; in decay mode, uses scheduler-local effective `w_n`. Handles partial-prefill (chunked) running requests.
+- `_energy_effective_w_n(request_id, original_w_n)`: Applies the preemption multiplier in decay mode without mutating the original request `w_n`.
 - `_energy_get_arrival(req, now_ms)`: Priority: `send_time` from extra_args > `req.arrival_time` > `now_ms`
 - `_energy_extract_slos(req)`: Pulls `(ttft_slo_ms, tpot_slo_ms, w_n)` from request's extra_args.
 - `_energy_ensure_req_state(rid, req, now_ms)`: Initialises per-request state for online weight update on first sight.
@@ -425,11 +429,7 @@ Implemented in `_energy_update_weights()`, runs at the start of every `schedule(
 
 ### 3.12 `vllm_patches/scheduler_energy.patch` — Git patch for scheduler.py
 
-Generated via `git diff` from the vLLM repo. Adds the `_energy_enabled` init block and 8 energy methods to `Scheduler`. Also adds `prev_step_scheduled_req_ids.discard()` to `_preempt_request` to prevent stale request IDs from persisting after preemption.
-
-### 3.13 `vllm_patches/energy_scheduler.py` (1155 lines) — Legacy subclass implementation
-
-An alternative subclass-based implementation (`EnergyScheduler(Scheduler)`) with `_materialise_batch()`, `_enforce_active_cap()`, `_kv_evict()`, etc. **Not used by `apply_patch.sh`** — not copied to the vLLM tree. Kept as a reference for the three-phase preemption approach (active-cap preemption → KV eviction → materialise-batch fallback) which differs from the embedded patch's admission-only design.
+Generated via `git diff` from the vLLM repo. Adds the `_energy_enabled` init block and energy scheduling methods to `Scheduler`. Also adds `prev_step_scheduled_req_ids.discard()` to `_preempt_request` to prevent stale request IDs from persisting after preemption.
 
 ---
 
@@ -441,7 +441,7 @@ An alternative subclass-based implementation (`EnergyScheduler(Scheduler)`) with
 1. `__init__`: Adds `self._energy_enabled` flag and energy scheduler init (solver, frequency controller, latency/power models, preempt cooldown dict) — gated by `VLLM_ENERGY_SCHEDULER=1` env var.
 2. `schedule()`: Adds `if self._energy_enabled: return self._schedule_energy()` dispatch at the top — default path is completely unchanged.
 3. `_preempt_request()`: Adds `self.prev_step_scheduled_req_ids.discard(request.request_id)` to prevent stale IDs after preemption.
-4. 8 new methods: `_schedule_energy`, `_energy_release_preempt_cooldowns`, `_energy_build_views`, `_energy_get_arrival`, `_energy_extract_slos`, `_energy_ensure_req_state`, `_energy_update_weights`, (no `_energy_pick_victim`).
+4. New energy methods: `_schedule_energy`, `_energy_release_preempt_cooldowns`, `_energy_build_views`, `_energy_effective_w_n`, `_energy_get_arrival`, `_energy_extract_slos`, `_energy_ensure_req_state`, `_energy_update_weights`, (no `_energy_pick_victim`).
 
 No changes to `vllm/__init__.py` (old monkey-patch hook removed).
 
@@ -558,8 +558,7 @@ energy_efficient_LLM_scheduling/
 │   ├── __init__.py                  # Package re-exports
 │   ├── scheduler_energy.patch       # Git patch for vLLM scheduler.py
 │   ├── apply_patch.sh               # Patch installer
-│   ├── unapply_patch.sh             # Patch rollback
-│   └── energy_scheduler.py          # Legacy subclass impl (reference only, not used)
+│   └── unapply_patch.sh             # Patch rollback
 └── results/
     └── demo/                        # Output directory (per TAG)
         ├── server_{default,custom}.log

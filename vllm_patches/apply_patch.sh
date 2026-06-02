@@ -10,7 +10,7 @@ echo "[apply_patch] Installing energy_sched package into ${VLLM_DIR} ..."
 rm -rf "${VLLM_DIR}/vllm/energy_sched/__pycache__" 2>/dev/null || true
 find "${VLLM_DIR}/vllm/energy_sched" -name '*.pyc' -delete 2>/dev/null || true
 
-# 1. Copy energy_sched package files (solver replaces energy_scheduler)
+# 1. Copy energy_sched package files
 mkdir -p "${VLLM_DIR}/vllm/energy_sched"
 cp "${PATCH_DIR}/__init__.py"             "${VLLM_DIR}/vllm/energy_sched/__init__.py"
 cp "${PATCH_DIR}/energy_model.py"          "${VLLM_DIR}/vllm/energy_sched/energy_model.py"

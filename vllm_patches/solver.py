@@ -26,11 +26,10 @@ from .energy_model import (
 @dataclass
 class EnergySchedConfig:
     beta: float = 1.0
-    w_ttft: float = 10.0
+    w_ttft: float = 100.0
     w_tpot: float = 1.0
     eta_ttft: float = 0.0
     eta_tpot: float = 0.0
-    eta_ms: float = 1e9
     Lmax: int = 0
     max_batch_size: int = 0
     default_w_n: float = 1.0
@@ -42,6 +41,9 @@ class EnergySchedConfig:
     chunked_prefill: bool = False
     log_every_n: int = 50
     iter_log_path: Optional[str] = None
+    preempt_mode: int = 1
+    preempt_decay_parameter: float = 100.0
+    preempt_min_multiplier: float = 0.0001
 
     @classmethod
     def from_env(cls) -> "EnergySchedConfig":
@@ -49,13 +51,17 @@ class EnergySchedConfig:
             beta=float(os.environ.get("VLLM_ENERGY_BETA", "1.0")),
             w_ttft=float(os.environ.get("VLLM_ENERGY_W_TTFT", "1.0")),
             w_tpot=float(os.environ.get("VLLM_ENERGY_W_TPOT", "1.0")),
-            eta_ms=float(os.environ.get("VLLM_ENERGY_ETA_MS", "1e9")),
             Lmax=int(os.environ.get("VLLM_ENERGY_LMAX", "0")),
             max_batch_size=int(os.environ.get("VLLM_ENERGY_MAX_BATCH_SIZE", "0")),
             freq_stride=int(os.environ.get("VLLM_ENERGY_FREQ_STRIDE", "1")),
             solution_mode=int(os.environ.get("VLLM_ENERGY_SOLUTION_MODE", "1")),
             chunked_prefill=os.environ.get("VLLM_ENERGY_CHUNKED_PREFILL", "0") == "1",
             iter_log_path=os.environ.get("VLLM_ENERGY_ITER_LOG"),
+            preempt_mode=int(os.environ.get("VLLM_ENERGY_PREEMPT_MODE", "1")),
+            preempt_decay_parameter=float(
+                os.environ.get("VLLM_ENERGY_PREEMPT_DECAY_PARAMETER", "100.0")),
+            preempt_min_multiplier=float(
+                os.environ.get("VLLM_ENERGY_PREEMPT_MIN_MULTIPLIER", "0.0001")),
         )
 
 

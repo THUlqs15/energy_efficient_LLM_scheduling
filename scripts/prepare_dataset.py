@@ -20,7 +20,7 @@ from huggingface_hub import snapshot_download
 OUTPUT = "trace.jsonl"
 # Path of the generated JSONL file (one request per line).
 
-NUM_REQUESTS = 400
+NUM_REQUESTS = 1000
 # Number of requests to sample into the trace.
 
 RATE_QPS = 2.0
@@ -32,11 +32,17 @@ TTFT_MEAN_MS = 4000.0
 TTFT_STD_MS = 800.0
 # Std dev of the TTFT SLO requirement (ms).
 
+TTFT_MIN_MS = 1000.0
+# Lower bound for TTFT SLO sampling (ms).
+
 TPOT_MEAN_MS = 100.0
 # Mean TPOT SLO requirement (ms).
 
 TPOT_STD_MS = 40.0
 # Std dev of the TPOT SLO requirement (ms).
+
+TPOT_MIN_MS = 40.0
+# Lower bound for TPOT SLO sampling (ms).
 
 MIN_OUTPUT_TOKENS = 1024
 # Minimum number of output tokens per request (uniformly sampled).
@@ -129,8 +135,8 @@ def main():
             arrival_s = i / RATE_QPS
             max_tokens = random.randint(MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS)
             #max_tokens = MAX_OUTPUT_TOKENS
-            ttft_ms = truncated_normal(TTFT_MEAN_MS, TTFT_STD_MS)
-            tpot_ms = truncated_normal(TPOT_MEAN_MS, TPOT_STD_MS)
+            ttft_ms = truncated_normal(TTFT_MEAN_MS, TTFT_STD_MS, low=TTFT_MIN_MS)
+            tpot_ms = truncated_normal(TPOT_MEAN_MS, TPOT_STD_MS, low=TPOT_MIN_MS)
             record = {
                 "id": f"req_{i:06d}",
                 "arrival_s": round(arrival_s, 6),
