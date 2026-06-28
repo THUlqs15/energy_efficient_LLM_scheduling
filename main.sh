@@ -13,7 +13,7 @@ set -euo pipefail
 # USER KNOBS — change these to control the experiment
 # ==============================================================================
 
-TAG="demo"
+TAG="beta_0.4"
 # Folder name under results/ where outputs are stored.
 # Change this each time to keep old results (e.g. TAG="beta01_run").
 
@@ -40,50 +40,34 @@ GPU_INDEX=0
 MAX_MODEL_LEN=8192
 # Maximum sequence length (input + output tokens).
 
-DEFAULT_MAX_NUM_SEQS=256
+DEFAULT_MAX_NUM_SEQS=256 # 256
 # Active cap for default scheduler.
 
-CUSTOM_MAX_NUM_SEQS=4000
+CUSTOM_MAX_NUM_SEQS=400
 # Active cap for custom scheduler (larger to give solver more candidates).
 
 GPU_MEM_UTIL=0.95
 # Fraction of GPU memory allocated for KV cache (0.0–1.0).
 
-# ----- Workload settings ------------------------------------------------------
-NUM_REQUESTS=1000
-# Number of requests to send in this run.
-# Must not exceed the number of lines in trace.jsonl.
-
-RATE_QPS=2.0
-# Request arrival rate (requests per second).
-# Determines how fast the workload is replayed from trace.jsonl.
-
-MIN_OUT_TOK=1024
-# Minimum number of output tokens per request.
-
-MAX_OUT_TOK=1024
-# Maximum number of output tokens per request.
-
 TRACE_SEED=42
 # Random seed for trace generation (used by prepare_dataset.py).
 
 # ----- Scheduler hyper-parameters (custom mode only) --------------------------
-BETA=4.0
+BETA=1.0 # 0.02
 # Energy-utility trade-off parameter. Larger β → solver prioritises energy
 # saving over SLO attainment, tends to pick lower GPU frequencies.
 # The energy term is β × Watts × seconds (Joules).
-# Typical range: 0.001 (mild energy saving) to 1.0 (aggressive energy saving).
 
-W_TTFT=2000.0
+W_TTFT=1000 # 1000
 # Weight for TTFT in the per-request priority calculation.
 # Higher w_TTFT makes the solver more sensitive to TTFT deadlines.
 
-W_TPOT=1.0
+W_TPOT=100  # 100
 # Weight for TPOT in the per-request priority calculation.
 # Higher w_TPOT makes the solver more sensitive to TPOT deadlines.
 
 VLLM_MAX_BATCHED_TOKENS=8192
-# Passed to vLLM --max-num-batched-tokens. Must be >= MAX_MODEL_LEN.
+# Passed to vLLM --max-num-batched-tokens. Must be >= MAX_MODEL_LEN when chunked prefill is disabled.
 # 0 means let vLLM pick its default.
 
 SOLVER_LMAX=8192
@@ -105,7 +89,7 @@ IS_COOLDOWN=2
 #   1 = current cooldown mechanism (hide preempted request until TTFT SLO elapses)
 #   2 = decay mechanism (keep request visible, but reduce effective w_n)
 
-DECAY_PARAMETER=200000
+DECAY_PARAMETER=10000
 # Only used when IS_COOLDOWN=2. Each preemption divides that request's
 # scheduler-local priority multiplier by this value.
 
@@ -114,6 +98,7 @@ SOLUTION_MODE=3
 #   1 = Heuristic 2 (freq-independent priority, single admission, joint prefix×freq)
 #   2 = Heuristic 3 (freq-dependent priority, per-frequency admission and prefix)
 #   3 = Heuristic 4 (freq-dependent priority, stop when q_n(f) <= 0, no prefix)
+#   4 = Heuristic 5 (H4 order, stop when normalized marginal Delta_n <= 0)
 
 IS_CHUNKED_PREFILL=1
 # 0 = non-chunked prefill (original logic, full prompt in one iteration)
@@ -141,7 +126,7 @@ for conda_sh in \
 done
 conda activate myvllm
 
-echo "[main] TAG=$TAG  MODE=$MODE  NUM_REQUESTS=$NUM_REQUESTS  RATE_QPS=$RATE_QPS"
+echo "[main] TAG=$TAG  MODE=$MODE"
 
 # ---------- 0. Apply patch -----------------------------------------------------
 echo "[main] Applying vLLM energy scheduler patch ..."

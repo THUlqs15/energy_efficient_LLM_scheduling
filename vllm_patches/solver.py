@@ -68,6 +68,9 @@ class EnergySchedConfig:
 @dataclass
 class ReqView:
     handle: Any
+    # Compute type: True uses the context/prefill latency model.  This is
+    # intentionally separate from the SLO type because a preempted decode
+    # request performs context recomputation while still waiting on TPOT.
     is_prefill: bool
     l_q: int
     l_kv: int
@@ -77,14 +80,21 @@ class ReqView:
     is_waiting: bool = False
     kv_blocks_needed: int = 0
     kv_blocks_incremental: int = 0
+    # None preserves the historical behavior where compute type also selected
+    # the SLO weight.  Preempted decode recomputation sets this to False.
+    slo_is_ttft: Optional[bool] = None
+
+    @property
+    def uses_ttft_slo(self) -> bool:
+        return self.is_prefill if self.slo_is_ttft is None else self.slo_is_ttft
 
 
 def baseline_reward(r: ReqView, cfg: EnergySchedConfig) -> float:
-    return r.w_n * (cfg.w_ttft if r.is_prefill else cfg.w_tpot)
+    return r.w_n * (cfg.w_ttft if r.uses_ttft_slo else cfg.w_tpot)
 
 
 class Alt1HeuristicSolver:
-    """Heuristic solver (H2, H3, and H4 modes).
+    """Heuristic solver (H2, H3, H4, and H5 modes).
 
     Step 1: priority q_n = r_n * min(exp(-s_n), CAP) / l_n
     Step 2: density-greedy fill until L_max or B_max binds
@@ -113,6 +123,8 @@ class Alt1HeuristicSolver:
         debug_iter: int = -1,
         waiting_capacity: Optional[int] = None,
     ) -> Tuple[float, list, float]:
+        if self.cfg.solution_mode == 4:
+            return self._solve_h5(reqs, Lmax, Bmax, debug_iter, waiting_capacity)
         if self.cfg.solution_mode == 3:
             return self._solve_h4(reqs, Lmax, Bmax, debug_iter, waiting_capacity)
         if self.cfg.solution_mode == 2:
@@ -138,6 +150,9 @@ class Alt1HeuristicSolver:
         t_c_s = lat.t_c / 1000.0
 
         is_pf = np.fromiter((r.is_prefill for r in reqs), dtype=bool, count=N)
+        uses_ttft_slo = np.fromiter(
+            (r.uses_ttft_slo for r in reqs), dtype=bool, count=N
+        )
         l_q = np.fromiter((r.l_q for r in reqs), dtype=np.float64, count=N)
         l_kv = np.fromiter((r.l_kv for r in reqs), dtype=np.float64, count=N)
         w_n = np.fromiter((r.w_n for r in reqs), dtype=np.float64, count=N)
@@ -149,7 +164,7 @@ class Alt1HeuristicSolver:
         )
         tok_arr = np.fromiter((r.l_q for r in reqs), dtype=np.int64, count=N)
 
-        r_n_vec = w_n * np.where(is_pf, cfg.w_ttft, cfg.w_tpot)
+        r_n_vec = w_n * np.where(uses_ttft_slo, cfg.w_ttft, cfg.w_tpot)
         s_n_s = deadline_s - wait_s
 
         wp_contrib = np.where(
@@ -207,11 +222,14 @@ class Alt1HeuristicSolver:
         num_d_vec = cum_dd + lat.w_dec * cum_has_dc
 
         stride = cfg.freq_stride
-        freqs = self.freq_candidates[::stride]
-        if not freqs:
-            freqs = self.freq_candidates
-        if self.freq_candidates and self.freq_candidates[-1] not in freqs:
-            freqs = freqs + [self.freq_candidates[-1]]
+        if beta == 0.0:
+            freqs = [1410]
+        else:
+            freqs = self.freq_candidates[::stride]
+            if not freqs:
+                freqs = self.freq_candidates
+            if self.freq_candidates and self.freq_candidates[-1] not in freqs:
+                freqs = freqs + [self.freq_candidates[-1]]
         f_arr = np.asarray(freqs, dtype=np.float64)
         f_alpha_arr = f_arr ** lat.alpha
         F = f_arr.size
@@ -279,6 +297,9 @@ class Alt1HeuristicSolver:
         cap = float(self.EXP_CAP)
 
         is_pf = np.fromiter((r.is_prefill for r in reqs), dtype=bool, count=N)
+        uses_ttft_slo = np.fromiter(
+            (r.uses_ttft_slo for r in reqs), dtype=bool, count=N
+        )
         l_q = np.fromiter((r.l_q for r in reqs), dtype=np.float64, count=N)
         l_kv = np.fromiter((r.l_kv for r in reqs), dtype=np.float64, count=N)
         w_n = np.fromiter((r.w_n for r in reqs), dtype=np.float64, count=N)
@@ -290,7 +311,7 @@ class Alt1HeuristicSolver:
         )
         tok_arr = np.fromiter((r.l_q for r in reqs), dtype=np.int64, count=N)
 
-        r_n_vec = w_n * np.where(is_pf, cfg.w_ttft, cfg.w_tpot)
+        r_n_vec = w_n * np.where(uses_ttft_slo, cfg.w_ttft, cfg.w_tpot)
         s_n_s = deadline_s - wait_s
         urgency = np.minimum(np.exp(-s_n_s), cap)
         ell_safe = np.maximum(tok_arr.astype(np.float64), 1.0)
@@ -303,12 +324,14 @@ class Alt1HeuristicSolver:
         B_eff = int(Bmax) if Bmax > 0 else N
 
         stride = cfg.freq_stride
-        freqs = self.freq_candidates[::stride]
-        if not freqs:
-            freqs = self.freq_candidates
-        if self.freq_candidates and self.freq_candidates[-1] not in freqs:
-            freqs = freqs + [self.freq_candidates[-1]]
-        #freqs = [1410]
+        if beta == 0.0:
+            freqs = [1410]
+        else:
+            freqs = self.freq_candidates[::stride]
+            if not freqs:
+                freqs = self.freq_candidates
+            if self.freq_candidates and self.freq_candidates[-1] not in freqs:
+                freqs = freqs + [self.freq_candidates[-1]]
         f_arr = np.asarray(freqs, dtype=np.float64)
         F = f_arr.size
         f_alpha_arr = f_arr ** lat.alpha
@@ -457,6 +480,9 @@ class Alt1HeuristicSolver:
         cap = float(self.EXP_CAP)
 
         is_pf = np.fromiter((r.is_prefill for r in reqs), dtype=bool, count=N)
+        uses_ttft_slo = np.fromiter(
+            (r.uses_ttft_slo for r in reqs), dtype=bool, count=N
+        )
         is_waiting = np.fromiter((r.is_waiting for r in reqs), dtype=bool, count=N)
         l_q = np.fromiter((r.l_q for r in reqs), dtype=np.float64, count=N)
         l_kv = np.fromiter((r.l_kv for r in reqs), dtype=np.float64, count=N)
@@ -469,7 +495,7 @@ class Alt1HeuristicSolver:
         )
         tok_arr = np.fromiter((r.l_q for r in reqs), dtype=np.int64, count=N)
 
-        r_n_vec = w_n * np.where(is_pf, cfg.w_ttft, cfg.w_tpot)
+        r_n_vec = w_n * np.where(uses_ttft_slo, cfg.w_ttft, cfg.w_tpot)
         s_n_s = deadline_s - wait_s
         deadline_safe_s = np.maximum(deadline_s, 1e-6)
         normalized_slack = s_n_s / deadline_safe_s
@@ -485,12 +511,14 @@ class Alt1HeuristicSolver:
         waiting_cap = N if waiting_capacity is None else max(0, int(waiting_capacity))
 
         stride = cfg.freq_stride
-        freqs = self.freq_candidates[::stride]
-        if not freqs:
-            freqs = self.freq_candidates
-        if self.freq_candidates and self.freq_candidates[-1] not in freqs:
-            freqs = freqs + [self.freq_candidates[-1]]
-        #freqs = [1410]
+        if beta == 0.0:
+            freqs = [1410]
+        else:
+            freqs = self.freq_candidates[::stride]
+            if not freqs:
+                freqs = self.freq_candidates
+            if self.freq_candidates and self.freq_candidates[-1] not in freqs:
+                freqs = freqs + [self.freq_candidates[-1]]
         f_arr = np.asarray(freqs, dtype=np.float64)
         F = f_arr.size
         f_alpha_arr = f_arr ** lat.alpha
@@ -601,6 +629,206 @@ class Alt1HeuristicSolver:
             n_d_ch = len(global_best_chosen) - n_p_ch
             print(
                 f"[dbg-h4] iter={debug_iter} all={N}(p={n_p}d={n_d}) "
+                f"chosen=B_{len(global_best_chosen)}(p={n_p_ch}d={n_d_ch}) "
+                f"f={global_best_f:.0f} J*={global_best_J:.3f} "
+                f"ET={global_best_et_s*1000.0:.2f}ms "
+                f"B_max={B_eff} CAP={self.EXP_CAP}",
+                file=sys.stderr, flush=True)
+
+        return float(global_best_f), [reqs[i] for i in global_best_chosen], global_best_et_s * 1000.0
+
+    def _solve_h5(
+        self,
+        reqs: List[ReqView],
+        Lmax: int,
+        Bmax: int,
+        debug_iter: int = -1,
+        waiting_capacity: Optional[int] = None,
+    ) -> Tuple[float, list, float]:
+        default_f = self.freq_candidates[-1] if self.freq_candidates else 1410
+        if not reqs:
+            return float(default_f), [], 0.0
+
+        N = len(reqs)
+        cfg = self.cfg
+        lat = self.latency
+        beta = cfg.beta
+        cap = float(self.EXP_CAP)
+
+        is_pf = np.fromiter((r.is_prefill for r in reqs), dtype=bool, count=N)
+        uses_ttft_slo = np.fromiter(
+            (r.uses_ttft_slo for r in reqs), dtype=bool, count=N
+        )
+        is_waiting = np.fromiter((r.is_waiting for r in reqs), dtype=bool, count=N)
+        l_q = np.fromiter((r.l_q for r in reqs), dtype=np.float64, count=N)
+        l_kv = np.fromiter((r.l_kv for r in reqs), dtype=np.float64, count=N)
+        w_n = np.fromiter((r.w_n for r in reqs), dtype=np.float64, count=N)
+        deadline_s = np.fromiter(
+            (r.deadline_ms / 1000.0 for r in reqs), dtype=np.float64, count=N
+        )
+        wait_s = np.fromiter(
+            (r.wait_ms / 1000.0 for r in reqs), dtype=np.float64, count=N
+        )
+        tok_arr = np.fromiter((r.l_q for r in reqs), dtype=np.int64, count=N)
+
+        r_n_vec = w_n * np.where(uses_ttft_slo, cfg.w_ttft, cfg.w_tpot)
+        s_n_s = deadline_s - wait_s
+        deadline_safe_s = np.maximum(deadline_s, 1e-6)
+        normalized_slack = s_n_s / deadline_safe_s
+        urgency = np.minimum(np.exp(-normalized_slack), cap)
+        ell_safe = np.maximum(tok_arr.astype(np.float64), 1.0)
+
+        wp_contrib = np.where(
+            is_pf, lat.a_p * l_q * l_q + lat.b_p * l_q * l_kv + lat.c_p * l_q, 0.0
+        )
+        wd_contrib = np.where(is_pf, 0.0, lat.a_d * l_kv + lat.b_d)
+
+        B_eff = int(Bmax) if Bmax > 0 else N
+        waiting_cap = N if waiting_capacity is None else max(0, int(waiting_capacity))
+
+        stride = cfg.freq_stride
+        if beta == 0.0:
+            freqs = [1410]
+        else:
+            freqs = self.freq_candidates[::stride]
+            if not freqs:
+                freqs = self.freq_candidates
+            if self.freq_candidates and self.freq_candidates[-1] not in freqs:
+                freqs = freqs + [self.freq_candidates[-1]]
+        f_arr = np.asarray(freqs, dtype=np.float64)
+        F = f_arr.size
+        f_alpha_arr = f_arr ** lat.alpha
+        P_f_arr = np.array(
+            [self.power.power_watts(float(f)) for f in freqs], dtype=np.float64
+        )
+
+        RU = r_n_vec * urgency
+        t_nf_all = (
+            wp_contrib[None, :] / f_arr[:, None]
+            + wd_contrib[None, :] / f_alpha_arr[:, None]
+        ) / 1000.0
+        q_all = (
+            RU[None, :] - beta * P_f_arr[:, None] * t_nf_all
+        ) / ell_safe[None, :]
+        orders_all = np.argsort(-q_all, axis=1, kind="stable")
+
+        global_best_J = -np.inf
+        global_best_f = float(default_f)
+        global_best_chosen: List[int] = []
+        global_best_et_s = 0.0
+        global_best_chunked: dict = {}
+
+        chunked = self.cfg.chunked_prefill
+        for fi in range(F):
+            f_float = float(f_arr[fi])
+            f_alpha = float(f_alpha_arr[fi])
+            P_f = float(P_f_arr[fi])
+            order_fi = orders_all[fi]
+
+            picked_local: List[int] = []
+            chunked_override: dict = {}
+            used_tok = 0
+            used_waiting = 0
+            has_pf = False
+            has_dc = False
+            et_hat_s = lat.t_c / 1000.0
+
+            for orig_idx in order_fi.tolist():
+                if len(picked_local) >= B_eff:
+                    break
+                if bool(is_waiting[orig_idx]) and used_waiting >= waiting_cap:
+                    continue
+
+                tok_n = int(tok_arr[orig_idx])
+                wp_n = float(wp_contrib[orig_idx])
+                wd_n = float(wd_contrib[orig_idx])
+                if used_tok + tok_n > Lmax:
+                    if chunked and bool(is_pf[orig_idx]):
+                        tok_n = Lmax - used_tok
+                        if tok_n <= 0:
+                            break
+                        actual_lq = float(tok_n)
+                        actual_lkv = float(l_kv[orig_idx])
+                        wp_n = (lat.a_p * actual_lq * actual_lq
+                                + lat.b_p * actual_lq * actual_lkv
+                                + lat.c_p * actual_lq)
+                    else:
+                        break
+
+                if bool(is_pf[orig_idx]):
+                    t_inc_s = wp_n / f_float
+                    if not has_pf:
+                        t_inc_s += lat.w_pf / f_float
+                else:
+                    t_inc_s = wd_n / f_alpha
+                    if not has_dc:
+                        t_inc_s += lat.w_dec / f_alpha
+                t_inc_s /= 1000.0
+
+                overshoot = max(et_hat_s + t_inc_s - s_n_s[orig_idx], 0.0)
+                overshoot /= deadline_safe_s[orig_idx]
+                delta_n = (
+                    r_n_vec[orig_idx] * np.exp(-overshoot)
+                    - beta * P_f * t_inc_s
+                ) / ell_safe[orig_idx]
+                if float(delta_n) <= 0.0:
+                    break
+
+                if tok_n != int(tok_arr[orig_idx]):
+                    chunked_override[len(picked_local)] = (wp_n, tok_n)
+                picked_local.append(int(orig_idx))
+                if bool(is_waiting[orig_idx]):
+                    used_waiting += 1
+                used_tok += tok_n
+                et_hat_s += t_inc_s
+                has_pf = has_pf or bool(is_pf[orig_idx])
+                has_dc = has_dc or not bool(is_pf[orig_idx])
+
+            if not picked_local:
+                continue
+
+            picked_idx = np.asarray(picked_local, dtype=np.int64)
+            is_pf_picked = is_pf[picked_idx]
+
+            dp = wp_contrib[picked_idx].astype(np.float64)
+            if chunked_override:
+                for pos, (new_wp, _) in chunked_override.items():
+                    dp[pos] = new_wp
+            dd = wd_contrib[picked_idx].astype(np.float64)
+
+            has_pf = bool(is_pf_picked.any())
+            has_dc = bool((~is_pf_picked).any())
+            num_p = float(dp.sum()) + (lat.w_pf if has_pf else 0.0)
+            num_d = float(dd.sum()) + (lat.w_dec if has_dc else 0.0)
+            ET_s = (num_p / f_float + num_d / f_alpha + lat.t_c) / 1000.0
+
+            overshoot = np.maximum(ET_s - s_n_s[picked_idx], 0.0)
+            overshoot = overshoot / deadline_safe_s[picked_idx]
+            utility = float((r_n_vec[picked_idx] * np.exp(-overshoot)).sum())
+            J_f = utility - beta * P_f * ET_s
+
+            if J_f > global_best_J:
+                global_best_J = float(J_f)
+                global_best_f = f_float
+                global_best_chosen = picked_local
+                global_best_et_s = float(ET_s)
+                global_best_chunked = dict(chunked_override)
+
+        if not global_best_chosen:
+            return float(default_f), [], 0.0
+
+        for pos, (_, actual_lq) in global_best_chunked.items():
+            if pos < len(global_best_chosen):
+                reqs[global_best_chosen[pos]].l_q = actual_lq
+
+        if debug_iter >= 0 and debug_iter % 10 == 0:
+            import sys
+            n_p = int(is_pf.sum())
+            n_d = N - n_p
+            n_p_ch = sum(1 for i in global_best_chosen if reqs[i].is_prefill)
+            n_d_ch = len(global_best_chosen) - n_p_ch
+            print(
+                f"[dbg-h5] iter={debug_iter} all={N}(p={n_p}d={n_d}) "
                 f"chosen=B_{len(global_best_chosen)}(p={n_p_ch}d={n_d_ch}) "
                 f"f={global_best_f:.0f} J*={global_best_J:.3f} "
                 f"ET={global_best_et_s*1000.0:.2f}ms "

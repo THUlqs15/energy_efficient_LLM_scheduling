@@ -2,7 +2,7 @@ diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
 index fe524ccac..facf3b4d6 100644
 --- a/vllm/v1/core/sched/scheduler.py
 +++ b/vllm/v1/core/sched/scheduler.py
-@@ -295,6 +295,54 @@ class Scheduler(SchedulerInterface):
+@@ -295,6 +295,57 @@ class Scheduler(SchedulerInterface):
  
          self._pause_state: PauseState = PauseState.UNPAUSED
  
@@ -41,6 +41,9 @@ index fe524ccac..facf3b4d6 100644
 +            self._eiter = 0
 +            self._eprev_record: dict | None = None
 +            self._elast_exec: dict[str, float] = {}
++            # Wall-clock time of the most recent token actually produced.
++            # Unlike _elast_exec, recomputation steps must not advance it.
++            self._elast_output_ms: dict[str, float] = {}
 +            self._ereq_state: dict[str, dict] = {}
 +            self._epreempt_cooldown: dict[str, float] = {}
 +            self._epreempt_multiplier: dict[str, float] = {}
@@ -57,7 +60,7 @@ index fe524ccac..facf3b4d6 100644
      def _mamba_block_aligned_split(
          self,
          request: Request,
-@@ -346,6 +394,9 @@ class Scheduler(SchedulerInterface):
+@@ -346,6 +397,9 @@ class Scheduler(SchedulerInterface):
          return num_new_tokens
  
      def schedule(self) -> SchedulerOutput:
@@ -67,7 +70,7 @@ index fe524ccac..facf3b4d6 100644
          # NOTE(woosuk) on the scheduling algorithm:
          # There's no "decoding phase" nor "prefill phase" in the scheduler.
          # Each request just has the num_computed_tokens and
-@@ -948,6 +999,524 @@ class Scheduler(SchedulerInterface):
+@@ -948,6 +1002,563 @@ class Scheduler(SchedulerInterface):
              self._update_after_schedule(scheduler_output)
          return scheduler_output
  
@@ -269,7 +272,6 @@ index fe524ccac..facf3b4d6 100644
 +                    self._epreempt_multiplier[vid] = max(
 +                        prev / decay, min_mult)
 +                self._elast_exec.pop(vid, None)
-+                self._ereq_state.pop(vid, None)
 +                f_star = (self._esolver.freq_candidates[-1]
 +                          if self._esolver.freq_candidates else 1410)
 +                self._efreq.set_frequency(int(f_star))
@@ -448,7 +450,6 @@ index fe524ccac..facf3b4d6 100644
 +
 +        views: list[ReqView] = []
 +        cfg = self._ecfg
-+        chunked = cfg.chunked_prefill
 +
 +        for req in self.waiting:
 +            if (self._ecfg.preempt_mode == 1
@@ -459,15 +460,31 @@ index fe524ccac..facf3b4d6 100644
 +            if not isinstance(ea, dict):
 +                ea = {}
 +            ttft = float(ea.get("ttft_ms", cfg.default_ttft_ms))
++            tpot = float(ea.get("tpot_ms", cfg.default_tpot_ms))
++            rid = req.request_id
 +            w_n = self._energy_effective_w_n(
-+                req.request_id, float(ea.get("w_n", cfg.default_w_n)))
++                rid, float(ea.get("w_n", cfg.default_w_n)))
 +            arrival_ms = self._energy_get_arrival(req, now_ms)
-+            wait_ms = now_ms - arrival_ms
-+            l_q = getattr(req, "num_prompt_tokens", 0) or req.num_tokens
-+            views.append(ReqView(
-+                handle=req, is_prefill=True, l_q=l_q, l_kv=0,
-+                wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n,
-+                is_waiting=True))
++            num_output = int(getattr(req, "num_output_tokens", 0))
++            num_computed = int(getattr(req, "num_computed_tokens", 0))
++            if num_output > 0:
++                # This is context recomputation, but the client is waiting
++                # for its next output token.  Preserve request-level decay,
++                # TPOT weight/deadline, and the last real output timestamp.
++                wait_ms = self._energy_tpot_wait_ms(rid, now_ms)
++                l_q = max(1, int(req.num_tokens) - num_computed)
++                views.append(ReqView(
++                    handle=req, is_prefill=True, l_q=l_q,
++                    l_kv=num_computed, wait_ms=wait_ms,
++                    deadline_ms=tpot, w_n=w_n, is_waiting=True,
++                    slo_is_ttft=False))
++            else:
++                wait_ms = now_ms - arrival_ms
++                l_q = getattr(req, "num_prompt_tokens", 0) or req.num_tokens
++                views.append(ReqView(
++                    handle=req, is_prefill=True, l_q=l_q, l_kv=0,
++                    wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n,
++                    is_waiting=True))
 +
 +        for req in self.running:
 +            sp = getattr(req, "sampling_params", None)
@@ -479,28 +496,48 @@ index fe524ccac..facf3b4d6 100644
 +            w_n = float(ea.get("w_n", cfg.default_w_n))
 +            num_prompt = getattr(req, "num_prompt_tokens", 0)
 +            num_computed = getattr(req, "num_computed_tokens", 0)
++            num_output = int(getattr(req, "num_output_tokens", 0))
++            recompute_target = max(
++                num_prompt, int(req.num_tokens) - 1) if num_output > 0 else num_prompt
 +
-+            if chunked and num_computed < num_prompt:
-+                remaining = num_prompt - num_computed
-+                arrival_ms = self._energy_get_arrival(req, now_ms)
-+                wait_ms = now_ms - arrival_ms
-+                views.append(ReqView(
-+                    handle=req, is_prefill=True,
-+                    l_q=remaining, l_kv=num_computed,
-+                    wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n))
++            if num_computed < recompute_target:
++                if num_output > 0:
++                    # A resumed decode is doing context work but is still
++                    # governed by the next-token TPOT clock.  Recompute all
++                    # outstanding known tokens rather than one per step.
++                    remaining = max(1, int(req.num_tokens) - num_computed)
++                    wait_ms = self._energy_tpot_wait_ms(
++                        req.request_id, now_ms)
++                    views.append(ReqView(
++                        handle=req, is_prefill=True,
++                        l_q=remaining, l_kv=num_computed,
++                        wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n,
++                        slo_is_ttft=False))
++                else:
++                    remaining = num_prompt - num_computed
++                    arrival_ms = self._energy_get_arrival(req, now_ms)
++                    wait_ms = now_ms - arrival_ms
++                    views.append(ReqView(
++                        handle=req, is_prefill=True,
++                        l_q=remaining, l_kv=num_computed,
++                        wait_ms=wait_ms, deadline_ms=ttft, w_n=w_n))
 +            else:
 +                rid = req.request_id
-+                last_exec = self._elast_exec.get(rid)
-+                if last_exec is not None:
-+                    wait_ms = now_ms - last_exec
-+                else:
-+                    wait_ms = now_ms - self._energy_get_arrival(req, now_ms)
++                wait_ms = self._energy_tpot_wait_ms(rid, now_ms)
 +                views.append(ReqView(
 +                    handle=req, is_prefill=False,
 +                    l_q=1, l_kv=num_computed,
 +                    wait_ms=wait_ms, deadline_ms=tpot, w_n=w_n))
 +
 +        return views
++
++    def _energy_tpot_wait_ms(self, request_id: str, now_ms: float) -> float:
++        last_output_ms = self._elast_output_ms.get(request_id)
++        if last_output_ms is None:
++            # Defensive fallback for a legacy/incomplete state.  The normal
++            # path records every real output in update_from_output().
++            last_output_ms = self._elast_exec.get(request_id, now_ms)
++        return max(0.0, now_ms - last_output_ms)
 +
 +    def _energy_effective_w_n(self, request_id: str, original_w_n: float) -> float:
 +        if self._ecfg.preempt_mode != 2:
@@ -565,8 +602,10 @@ index fe524ccac..facf3b4d6 100644
 +            if n_out >= 1 and not st["ttft_fired"]:
 +                ttft_obs_ms = now_ms - st["arrival_ms"]
 +                slo = max(st["ttft_slo_ms"], 1e-6)
-+                delta = cfg.eta_ttft * st["w_n"] * (ttft_obs_ms / slo - 1.0)
-+                cfg.w_ttft = max(0.0, cfg.w_ttft + delta)
++                ttft_ratio = ttft_obs_ms / slo
++                ttft_pos_viol = max(0.0, ttft_ratio - 1.0)
++                delta = cfg.eta_ttft * st["w_n"] * (ttft_pos_viol - 0.05)
++                cfg.w_ttft = max(0.01, cfg.w_ttft + delta)
 +                st["ttft_fired"] = True
 +                st["first_tok_ms"] = now_ms
 +                n_ttft += 1
@@ -576,6 +615,7 @@ index fe524ccac..facf3b4d6 100644
 +        for rid in disappeared:
 +            st = self._ereq_state.pop(rid)
 +            self._epreempt_multiplier.pop(rid, None)
++            self._elast_output_ms.pop(rid, None)
 +            if not st["ttft_fired"] or st["first_tok_ms"] is None:
 +                continue
 +            n_decode_tokens = max(0, st["last_num_out"] - 1)
@@ -583,7 +623,9 @@ index fe524ccac..facf3b4d6 100644
 +                continue
 +            avg_tpot_obs_ms = (now_ms - st["first_tok_ms"]) / n_decode_tokens
 +            slo = max(st["tpot_slo_ms"], 1e-6)
-+            delta = cfg.eta_tpot * st["w_n"] * (avg_tpot_obs_ms / slo - 1.0)
++            tpot_ratio = avg_tpot_obs_ms / slo
++            tpot_pos_viol = max(0.0, tpot_ratio - 1.0)
++            delta = cfg.eta_tpot * st["w_n"] * (tpot_pos_viol - 0.05)
 +            cfg.w_tpot = max(0.01, cfg.w_tpot + delta)
 +            n_tpot += 1
 +
@@ -592,7 +634,7 @@ index fe524ccac..facf3b4d6 100644
      def _build_kv_connector_meta(
          self, connector: KVConnectorBase_V1, scheduler_output: SchedulerOutput
      ) -> KVConnectorMetadata:
-@@ -969,6 +1538,7 @@ class Scheduler(SchedulerInterface):
+@@ -969,6 +1580,7 @@ class Scheduler(SchedulerInterface):
          if request.spec_token_ids:
              request.spec_token_ids = []
          request.num_preemptions += 1
@@ -600,3 +642,14 @@ index fe524ccac..facf3b4d6 100644
          if self.log_stats:
              request.record_event(EngineCoreEventType.PREEMPTED, timestamp)
  
+@@ -1400,7 +2012,10 @@ class Scheduler(SchedulerInterface):
+             if new_token_ids:
+                 new_token_ids, stopped = self._update_request_with_output(
+                     request, new_token_ids
+                 )
++                if self._energy_enabled:
++                    # Record only real outputs; recomputation must not reset TBT.
++                    self._elast_output_ms[req_id] = time.time() * 1000.0
+             elif request.pooling_params and pooler_output is not None:
+                 # Pooling stops as soon as there is output.
+                 request.status = RequestStatus.FINISHED_STOPPED

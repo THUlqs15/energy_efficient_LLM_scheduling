@@ -29,6 +29,16 @@ class LatencyParams:
     b_d: float = 1.0264e+02
     alpha: float = 9.8808e-01
     t_c: float = 6.5821e+00
+    # # --- robust prefill refit on batch_time_trace.jsonl ---
+    #a_p: float = 0.0000e+00
+    #b_p: float = 7.7996e-02
+    #c_p: float = 2.0451e+02
+    #w_pf: float = 2.4400e+04
+    #w_dec: float = 1.5000e+04
+    #a_d: float = 1.6748e-01
+    #b_d: float = 1.0264e+02
+    #alpha: float = 9.8808e-01
+    #t_c: float = 6.5821e+00
 
     @classmethod
     def from_json(cls, path: str) -> "LatencyParams":

@@ -27,18 +27,34 @@ fi
 
 # 3. Apply scheduler.py patch (embedded energy branch)
 PATCH_FILE="${PATCH_DIR}/scheduler_energy.patch"
+SCHEDULER_PATH="vllm/v1/core/sched/scheduler.py"
 if [[ ! -f "$PATCH_FILE" ]]; then
     echo "[apply_patch] ERROR: scheduler_energy.patch not found at ${PATCH_FILE}"
     exit 1
 fi
 
-# Check if patch is already applied
-if cd "${VLLM_DIR}" && git diff --quiet vllm/v1/core/sched/scheduler.py 2>/dev/null; then
+if cd "${VLLM_DIR}" && git apply --check "${PATCH_FILE}" 2>/dev/null; then
     echo "[apply_patch] Applying scheduler_energy.patch ..."
     git apply "${PATCH_FILE}"
     echo "[apply_patch] Patch applied successfully."
+elif cd "${VLLM_DIR}" && git apply -R --check "${PATCH_FILE}" 2>/dev/null; then
+    echo "[apply_patch] scheduler_energy.patch already applied — skipping."
+elif grep -q "_energy_enabled" "${VLLM_DIR}/${SCHEDULER_PATH}" 2>/dev/null; then
+    echo "[apply_patch] Existing energy scheduler patch is stale — refreshing scheduler.py ..."
+    backup_path="/tmp/scheduler.py.energy_stale.$(date +%s).bak"
+    cp "${VLLM_DIR}/${SCHEDULER_PATH}" "$backup_path"
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' EXIT
+    mkdir -p "${tmpdir}/$(dirname "${SCHEDULER_PATH}")"
+    git -C "${VLLM_DIR}" show "HEAD:${SCHEDULER_PATH}" \
+        > "${tmpdir}/${SCHEDULER_PATH}"
+    git -C "$tmpdir" apply "${PATCH_FILE}"
+    cp "${tmpdir}/${SCHEDULER_PATH}" "${VLLM_DIR}/${SCHEDULER_PATH}"
+    echo "[apply_patch] Refreshed scheduler.py (backup: ${backup_path})."
 else
-    echo "[apply_patch] scheduler.py already modified — skipping patch (re-run unapply_patch.sh first to re-apply)."
+    echo "[apply_patch] ERROR: scheduler.py has unrelated local changes; refusing to overwrite."
+    echo "[apply_patch] Revert or inspect ${VLLM_DIR}/${SCHEDULER_PATH}, then re-run."
+    exit 1
 fi
 
 echo "[apply_patch] Done."

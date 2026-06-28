@@ -93,13 +93,14 @@ async def send_one(
                     choices = chunk.get("choices", [])
                     if choices:
                         text = choices[0].get("text", "")
-                    now = wall_time()
-                    if first_chunk_time is None:
-                        first_chunk_time = now
-                    if prev_chunk_time is not None:
-                        inter_chunk_gaps.append((now - prev_chunk_time) * 1000.0)
-                    prev_chunk_time = now
                     if text:
+                        now = wall_time()
+                        if first_chunk_time is None:
+                            first_chunk_time = now
+                        if prev_chunk_time is not None:
+                            inter_chunk_gaps.append(
+                                (now - prev_chunk_time) * 1000.0)
+                        prev_chunk_time = now
                         token_count += 1
             rr.complete_time = wall_time()
             if first_chunk_time is not None:
@@ -121,7 +122,7 @@ async def main():
     p.add_argument("--endpoint", default="http://localhost:8000/v1/completions")
     p.add_argument("--model", default="default")
     p.add_argument("--output", default="results.jsonl")
-    p.add_argument("--max-concurrency", type=int, default=500)
+    p.add_argument("--max-concurrency", type=int, default=1000)
     args = p.parse_args()
 
     records = []

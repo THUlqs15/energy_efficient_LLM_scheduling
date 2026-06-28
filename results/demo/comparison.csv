@@ -1,12 +1,8 @@
 metric,default,custom
-mean_ttft_ms,140.43,199.15
-mean_tpot_ms,43.91,70.68
 mean_ttft_violation_ms,0.0,0.0
-mean_tpot_violation_ms,0.03,2.42
+mean_tpot_violation_ms,0.08,0.15
 mean_normalized_ttft_violation,0.0,0.0
-mean_normalized_tpot_violation,0.000636,0.045227
-ttft_slo_attainment,1.0,1.0
-tpot_slo_attainment,0.988,0.83
-mean_power_w,374.43,264.42
-total_energy_j,199319.99,144518.8
-mean_solve_exec_ratio,0.0,0.049441
+mean_normalized_tpot_violation,0.001503,0.003017
+mean_power_w,339.86,349.71
+total_energy_j,57132.36,59000.18
+mean_solve_exec_ratio,0.0,0.008139

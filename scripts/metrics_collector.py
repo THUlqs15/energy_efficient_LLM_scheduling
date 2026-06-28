@@ -178,12 +178,21 @@ def main():
         "total_energy_j": round(total_energy, 2),
         "mean_solve_exec_ratio": round(ratio, 6),
     }
+    printed_summary = {
+        key: value for key, value in summary.items()
+        if key not in {
+            "mean_ttft_ms",
+            "mean_tpot_ms",
+            "ttft_slo_attainment",
+            "tpot_slo_attainment",
+        }
+    }
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"[metrics_collector] {args.label}: {json.dumps(summary, indent=2)}")
+    print(f"[metrics_collector] {args.label}: {json.dumps(printed_summary, indent=2)}")
     print(f"[metrics_collector] Wrote {args.output}")
 
 
