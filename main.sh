@@ -74,7 +74,7 @@ SOLVER_LMAX=8192
 # Only for custom solver. Maximum tokens per batch in the solver's greedy fill.
 # Can be smaller than MAX_MODEL_LEN.
 
-FREQ_STRIDE=3
+FREQ_STRIDE=4
 # Stride for frequency candidate subsampling. A800 has 82 supported SM clocks;
 # with stride=4, the solver evaluates every 4th clock (ceil(82/4) = 21 candidates).
 # Larger = faster solving but coarser frequency search.
@@ -93,12 +93,15 @@ DECAY_PARAMETER=10000
 # Only used when IS_COOLDOWN=2. Each preemption divides that request's
 # scheduler-local priority multiplier by this value.
 
-SOLUTION_MODE=3
+SOLUTION_MODE=5
 # Solver heuristic:
-#   1 = Heuristic 2 (freq-independent priority, single admission, joint prefix×freq)
-#   2 = Heuristic 3 (freq-dependent priority, per-frequency admission and prefix)
 #   3 = Heuristic 4 (freq-dependent priority, stop when q_n(f) <= 0, no prefix)
-#   4 = Heuristic 5 (H4 order, stop when normalized marginal Delta_n <= 0)
+#   4 = Heuristic 5 (H4 order/admission, objective utility uses exp(-s_n/D_n))
+#   5 = Heuristic 6 (hard deadline, grid search over tau thresholds)
+
+H6_TAU_GRID=4
+# Only used when SOLUTION_MODE=5. Number of tau thresholds sampled uniformly
+# from [max(min_n s_n, 10ms), max_n s_n].
 
 IS_CHUNKED_PREFILL=1
 # 0 = non-chunked prefill (original logic, full prompt in one iteration)
@@ -183,6 +186,7 @@ run_experiment() {
             VLLM_ENERGY_PREEMPT_MIN_MULTIPLIER=0.000005
             VLLM_ENERGY_FREQ_STRIDE=$FREQ_STRIDE
             VLLM_ENERGY_SOLUTION_MODE=$SOLUTION_MODE
+            VLLM_ENERGY_H6_TAU_GRID=$H6_TAU_GRID
             VLLM_ENERGY_GPU_INDEX=0
             VLLM_ENERGY_ITER_LOG=${tag_dir}/iter_custom.log
             VLLM_ENERGY_CHUNKED_PREFILL=$IS_CHUNKED_PREFILL

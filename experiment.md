@@ -5,9 +5,9 @@
 We run a single vLLM server serving Qwen3-14B on an A800-SXM4-80GB GPU and compare two schedulers on the same workload:
 
 - **Baseline**: vLLM's default FCFS scheduler, GPU clocks not locked.
-- **Ours (custom)**: an energy-aware scheduler based on the **Heuristic 4 (H4)** formulation — a two-step algorithm (frequency-dependent priority scoring with normalized slack → greedy fill with q_n≤0 cutoff) with online adaptive weight updates. The scheduler selects both the GPU SM frequency and batch composition per iteration, locking the SM clock via `pynvml`.
+- **Ours (custom)**: an energy-aware scheduler with selectable H4/H5/H6 solver modes. The scheduler selects both the GPU SM frequency and batch composition per iteration, locking the SM clock via `pynvml`.
 
-Current default configuration: `SOLUTION_MODE=3` (H4), `IS_COOLDOWN=2` (priority decay on preemption), `IS_CHUNKED_PREFILL=1` (chunked prefill enabled).
+Current default configuration: `SOLUTION_MODE=5` (H6), `IS_COOLDOWN=2` (priority decay on preemption), `IS_CHUNKED_PREFILL=1` (chunked prefill enabled).
 
 Reported metrics include mean TTFT/TPOT, SLO violations (absolute and normalized), SLO attainment, power, energy, and the mean solve-to-execution ratio.
 
@@ -25,7 +25,7 @@ bash main.sh
 
 ## 3. Files Created — Full Code Review
 
-### 3.1 `main.sh` (305 lines) — Master experiment orchestrator
+### 3.1 `main.sh` (309 lines) — Master experiment orchestrator
 
 **Purpose**: Controls the full experiment lifecycle — applies the vLLM patch, generates the workload trace, launches the vLLM server, replays the workload, logs power, collects metrics, and compares results.
 
@@ -50,45 +50,46 @@ bash main.sh
 | `W_TPOT` | `100` | Initial weight for TPOT in priority calculation (mutable — drifts online) |
 | `VLLM_MAX_BATCHED_TOKENS` | `8192` | Passed to vLLM `--max-num-batched-tokens`; must be ≥ MAX_MODEL_LEN |
 | `SOLVER_LMAX` | `8192` | Solver-side max tokens per batch in greedy fill |
-| `FREQ_STRIDE` | `3` | Stride for frequency candidate subsampling |
+| `FREQ_STRIDE` | `4` | Stride for frequency candidate subsampling |
 | `MAX_BATCH_SIZE` | `256` | Max requests per iteration (batch cap) |
 | `IS_COOLDOWN` | `2` | Preemption handling: 1=TTFT-SLO cooldown, 2=effective `w_n` decay |
 | `DECAY_PARAMETER` | `10000` | Only for `IS_COOLDOWN=2`; each preemption divides the request multiplier by this value |
-| `SOLUTION_MODE` | `3` | Solver heuristic (1=H2, 2=H3, 3=H4, 4=H5) |
+| `SOLUTION_MODE` | `5` | Solver heuristic (3=H4, 4=H5, 5=H6) |
+| `H6_TAU_GRID` | `4` | Number of hard-deadline tau thresholds for H6 |
 | `IS_CHUNKED_PREFILL` | `1` | 0=non-chunked prefill, 1=chunked prefill |
 | `POWER_INTERVAL_S` | `0.05` | GPU power sampling interval (seconds) |
 
-**L114**: Captures the script directory so all paths are absolute regardless of CWD.
+**L117**: Captures the script directory so all paths are absolute regardless of CWD.
 
-**L117–127**: Conda activation. Tries four possible `conda.sh` locations (miniconda3, anaconda3, /opt/conda), sources the first one found, then activates the `myvllm` environment.
+**L119–130**: Conda activation. Tries four possible `conda.sh` locations (miniconda3, anaconda3, /opt/conda), sources the first one found, then activates the `myvllm` environment.
 
-**L132–133**: Calls `apply_patch.sh` to copy the energy scheduler Python files into the vLLM source tree and apply the scheduler patch.
+**L134–136**: Calls `apply_patch.sh` to copy the energy scheduler Python files into the vLLM source tree and apply the scheduler patch.
 
-**L136–141**: Conditional trace generation. If `trace.jsonl` already exists, it is reused. Delete the file to force regeneration.
+**L138–144**: Conditional trace generation. If `trace.jsonl` already exists, it is reused. Delete the file to force regeneration.
 
-**L145–154**: `reset_gpu_clocks()` helper — uses `FrequencyController` to reset GPU clocks, falls back to `nvidia-smi -rgc / -rmc`.
+**L148–157**: `reset_gpu_clocks()` helper — uses `FrequencyController` to reset GPU clocks, falls back to `nvidia-smi -rgc / -rmc`.
 
-**L157–287: `run_experiment()` function** — The core experiment runner:
+**L160–290: `run_experiment()` function** — The core experiment runner:
 
-- **L158–163**: Maps `"default"`/`"custom"` label to the output file suffix.
-- **L169–190**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0`. For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, `VLLM_ENERGY_W_TPOT`, `VLLM_ENERGY_LMAX`, `VLLM_ENERGY_MAX_BATCH_SIZE`, `VLLM_ENERGY_PREEMPT_MODE`, `VLLM_ENERGY_PREEMPT_DECAY_PARAMETER`, `VLLM_ENERGY_PREEMPT_MIN_MULTIPLIER`, `VLLM_ENERGY_FREQ_STRIDE`, `VLLM_ENERGY_SOLUTION_MODE`, `VLLM_ENERGY_GPU_INDEX`, `VLLM_ENERGY_ITER_LOG`, `VLLM_ENERGY_CHUNKED_PREFILL`).
-- **L197–224**: Launches the vLLM server as a background process. Key flags:
+- **L161–166**: Maps `"default"`/`"custom"` label to the output file suffix.
+- **L171–193**: Builds the server environment variable array. For baseline, `VLLM_ENERGY_SCHEDULER=0`. For custom mode, sets `VLLM_ENERGY_SCHEDULER=1` plus all hyperparameters (`VLLM_ENERGY_BETA`, `VLLM_ENERGY_W_TTFT`, `VLLM_ENERGY_W_TPOT`, `VLLM_ENERGY_LMAX`, `VLLM_ENERGY_MAX_BATCH_SIZE`, `VLLM_ENERGY_PREEMPT_MODE`, `VLLM_ENERGY_PREEMPT_DECAY_PARAMETER`, `VLLM_ENERGY_PREEMPT_MIN_MULTIPLIER`, `VLLM_ENERGY_FREQ_STRIDE`, `VLLM_ENERGY_SOLUTION_MODE`, `VLLM_ENERGY_H6_TAU_GRID`, `VLLM_ENERGY_GPU_INDEX`, `VLLM_ENERGY_ITER_LOG`, `VLLM_ENERGY_CHUNKED_PREFILL`).
+- **L200–228**: Launches the vLLM server as a background process. Key flags:
   - `--enforce-eager`: Disables CUDA graphs (needed because frequency changes invalidate graph caches)
   - `--no-async-scheduling`: Disables async scheduling so the scheduler sees all running/waiting requests at each iteration
   - `--enable-chunked-prefill` or `--no-enable-chunked-prefill`: Controlled by `IS_CHUNKED_PREFILL` knob
   - `--max-num-batched-tokens`: Set from `VLLM_MAX_BATCHED_TOKENS` if > 0
   - `--no-enable-prefix-caching`: Disables prefix caching (simplifies KV cache accounting)
   - `--enable-logging-iteration-details`: Enables detailed per-iteration logging
-- **L227–240**: Health check loop. Polls `http://localhost:PORT/health` every 2 seconds for up to 240 seconds.
-- **L243–248**: Starts `power_logger.py` as a background process.
-- **L251–256**: Runs `workload_sender.py` synchronously — blocks until all requests are done.
-- **L259–266**: Stops power logger and server via `kill`.
-- **L269–271**: Resets GPU clocks to default after custom mode.
-- **L274–285**: Runs `metrics_collector.py` to aggregate results into `summary_${label}.json`.
+- **L231–244**: Health check loop. Polls `http://localhost:PORT/health` every 2 seconds for up to 240 seconds.
+- **L246–252**: Starts `power_logger.py` as a background process.
+- **L254–260**: Runs `workload_sender.py` synchronously — blocks until all requests are done.
+- **L262–270**: Stops power logger and server via `kill`.
+- **L272–275**: Resets GPU clocks to default after custom mode.
+- **L277–288**: Runs `metrics_collector.py` to aggregate results into `summary_${label}.json`.
 
-**L290–296**: Sequential experiment execution. If `MODE` is `"default"` or `"both"`, runs baseline. If `"custom"` or `"both"`, runs custom.
+**L293–300**: Sequential experiment execution. If `MODE` is `"default"` or `"both"`, runs baseline. If `"custom"` or `"both"`, runs custom.
 
-**L299–305**: Runs `compare_results.py` to produce a side-by-side comparison table and CSV.
+**L302–309**: Runs `compare_results.py` to produce a side-by-side comparison table and CSV.
 
 ---
 
@@ -245,9 +246,9 @@ The energy scheduler is split into two layers:
 1. **`vllm_patches/solver.py`** — Pure algorithm (no vLLM imports, only numpy + stdlib)
 2. **`vllm/v1/core/sched/scheduler.py`** — vLLM integration (applied via git patch)
 
-#### 3.9.1 `vllm_patches/solver.py` (848 lines) — Algorithm Layer
+#### 3.9.1 `vllm_patches/solver.py` (692 lines) — Algorithm Layer
 
-Contains `EnergySchedConfig`, `ReqView`, `Alt1HeuristicSolver` (H2 + H3 + H4 + H5), `baseline_reward()`, `_open_iter_log()`.
+Contains `EnergySchedConfig`, `ReqView`, `Alt1HeuristicSolver` (H4 + H5 + H6), `baseline_reward()`, `_open_iter_log()`.
 
 ##### `ReqView` dataclass
 
@@ -260,7 +261,7 @@ Contains `EnergySchedConfig`, `ReqView`, `Alt1HeuristicSolver` (H2 + H3 + H4 + H
 | `wait_ms` | float | Time since arrival/last output (ms) |
 | `deadline_ms` | float | SLO deadline (TTFT for prefill, TPOT for decode, in ms) |
 | `w_n` | float | Per-request priority weight |
-| `is_waiting` | bool | True if request is in the waiting queue (used by H4/H5 for admission cap) |
+| `is_waiting` | bool | True if request is in the waiting queue (used by H4/H5/H6 for admission cap) |
 | `kv_blocks_needed` | int | Full KV size in blocks |
 | `kv_blocks_incremental` | int | New blocks needed this iteration |
 | `slo_is_ttft` | Optional[bool] | SLO type override. `None` = follow `is_prefill`; `False` = preempted decode doing context recomputation (compute=prefill but SLO=TPOT) |
@@ -283,17 +284,9 @@ Key quantities per request `n` at iteration `i`:
 | `ET_i(B, f)` | predicted batch execution time at frequency `f` | seconds |
 | `P(f)` | GPU power draw at frequency `f` | watts |
 
-**Four solver modes** (`SOLUTION_MODE`):
+**Three solver modes** (`SOLUTION_MODE`):
 
-##### H2 (`SOLUTION_MODE=1`): Frequency-independent priority
-
-Frequency-independent single-order admission with joint prefix×frequency enumeration. Uses raw slack `s_n` (not normalized). Complexity: `O(N log N + |F|·|B̂|²)`. Brief overview only — not the active mode.
-
-##### H3 (`SOLUTION_MODE=2`): Frequency-dependent priority
-
-Frequency-dependent priority with per-frequency greedy admission and prefix enumeration. Uses raw slack `s_n`. Complexity: `O(|F|·(N log N + |B̂|²))`. Brief overview only — not the active mode.
-
-##### H4 (`SOLUTION_MODE=3`, default): Frequency-dependent priority with normalization
+##### H4 (`SOLUTION_MODE=3`): Frequency-dependent priority with normalization
 
 The key innovation of H4 is **normalized slack and overshoot**, which makes the urgency signal scale-invariant across requests with different SLO targets. This is critical now that the workload uses discrete SLO classes (strict: 600ms TTFT / 80ms TPOT; normal: 1000ms / 100ms; relaxed: 1500ms / 150ms) — without normalization, strict requests with small absolute slack would dominate the priority ordering.
 
@@ -312,7 +305,7 @@ Where:
 
 Normalization by `deadline_n` ensures that a request with TTFT SLO = 1000ms at 500ms wait has the same urgency as a request with TPOT SLO = 100ms at 50ms wait (both at 50% slack). The frequency-dependent energy term `β · P(f) · t_n(f)` subtracts the marginal energy cost of adding request `n` at frequency `f`.
 
-Implementation details (solver.py L464–638):
+Implementation details (solver.py L139–313):
 - Vectorized computation: `is_pf`, `uses_ttft_slo`, `is_waiting`, `l_q`, `l_kv`, `w_n`, `deadline_s`, `wait_s` are extracted into numpy arrays from the `ReqView` list.
 - `r_n_vec = w_n * np.where(uses_ttft_slo, cfg.w_ttft, cfg.w_tpot)` — baseline reward uses the `uses_ttft_slo` property, not `is_prefill`.
 - Prefill latency contribution: `wp_contrib = a_p · l_q² + b_p · l_q · l_kv + c_p · l_q` (zero for decode)
@@ -334,7 +327,7 @@ For each frequency candidate `f`:
 
 **Step 3 — Batch Evaluation (no prefix enumeration)**:
 
-Unlike H2/H3, H4 does **not** enumerate prefix subsets. The full greedy batch for each frequency is evaluated as a single batch:
+H4 does **not** enumerate prefix subsets. The full greedy batch for each frequency is evaluated as a single batch:
 ```
 ET_i(B, f) = (Σ_p wp_n/f + Σ_d wd_n/f^α + ovh(B,f) + t_c) / 1000
 
@@ -349,13 +342,18 @@ f* = argmax_f J(f)
 
 The normalized overshoot `/ deadline_n` in the utility function ensures that a 10ms overshoot on a 100ms TPOT SLO penalises the same as a 100ms overshoot on a 1000ms TTFT SLO (both 10%).
 
-**Key differences from H2/H3**: (1) normalized slack in priority, (2) q_n ≤ 0 cutoff, (3) no prefix enumeration, (4) normalized overshoot in utility, (5) waiting_capacity admission constraint, (6) chunked prefill truncation.
+**Key H4 properties**: (1) normalized slack in priority, (2) q_n ≤ 0 cutoff, (3) no prefix enumeration, (4) normalized overshoot in utility, (5) waiting_capacity admission constraint, (6) chunked prefill truncation.
 
-**Frequency stride**: All modes subsample frequency candidates by `freq_stride`. A800 has ~82 supported SM clocks (210–1410 MHz, 15 MHz steps); with `freq_stride=3`, the solver evaluates every 3rd clock (~28 candidates). If the max frequency (1410 MHz) is not in the subsampled list, it is appended as a fallback. When `β=0`, only 1410 MHz is evaluated (no energy saving possible).
+**Frequency stride**: All modes subsample frequency candidates by `freq_stride`. A800 has ~82 supported SM clocks (210–1410 MHz, 15 MHz steps); with the current `freq_stride=4`, the solver evaluates every 4th clock (~21 candidates). If the max frequency (1410 MHz) is not in the subsampled list, it is appended as a fallback. When `β=0`, only 1410 MHz is evaluated (no energy saving possible).
 
-##### H5 (`SOLUTION_MODE=4`): Incremental marginal-value cutoff
+##### H5 (`SOLUTION_MODE=4`): H4 admission with slack-only utility
 
-Similar to H4 in using normalized slack and no prefix enumeration, but replaces the batch-level cutoff `q_n(f) > 0` with an **incremental marginal-value test** Δ_n. During greedy fill, the running batch execution time `et_hat_s` is tracked incrementally; each candidate request's overshoot is evaluated against the *current* batch time (not just its own latency), and admission stops when the marginal utility-minus-energy contribution turns negative. Brief overview only — not the active mode.
+Similar to H4 in using normalized slack, frequency-dependent ordering, `q_n(f) > 0` admission, and no prefix enumeration. The only intended difference is the final frequency-selection objective: H4 uses the predicted batch execution time in the utility term,
+`r_n · exp(-[ET(B,f)-s_n]^+ / D_n)`, while H5 uses the slack-only urgency term `r_n · exp(-s_n/D_n)`. Thus H5 still subtracts the energy term `β · P(f) · ET(B,f)`, but its request utility does not depend on the candidate batch execution time. Brief overview only — not the active mode.
+
+##### H6 (`SOLUTION_MODE=5`): Hard-deadline threshold grid
+
+H6 uses the hard-deadline objective `Σ r_n · 1[ET(B,f) <= s_n] - β · P(f) · ET(B,f)`. For each frequency, it samples `H6_TAU_GRID` threshold values uniformly from `[max(min_n s_n, 10ms), max_n s_n]`. For each threshold `τ`, it keeps only requests with `s_n >= τ`, sorts them by `q_n(f) = (r_n - β · P(f) · t_n(f)) / ℓ_n`, greedily admits a request only when `ET(B ∪ {n}, f) <= τ`, then evaluates the hard objective and selects the best `(f, τ, B)`.
 
 #### 3.9.2 vLLM Integration — Embedded `_schedule_energy()`
 
@@ -469,7 +467,7 @@ In decay mode (`IS_COOLDOWN=2`), preempted requests are handled as follows:
 
 When chunked prefill is enabled (`--enable-chunked-prefill` on the vLLM server, `IS_CHUNKED_PREFILL=1` in main.sh):
 
-**Solver side** (all modes H2–H5):
+**Solver side** (modes H4–H6):
 - During greedy fill, if a prefill request's `l_q` would exceed the remaining token budget (`used_tok + tok_n > Lmax`), it is admitted with a **truncated** token count: `tok_n = Lmax − used_tok`.
 - The latency contribution `wp_contrib` is recomputed using the truncated `l_q` and the actual `l_kv`: `wp_n = a_p · l_q² + b_p · l_q · l_kv + c_p · l_q`.
 - The truncation is recorded in `chunked_override[position] = (new_wp, truncated_l_q)` and applied back to the `ReqView.l_q` after the best frequency is selected. The scheduler uses this truncated `l_q` as `num_new_tokens` when calling `allocate_slots()`.
@@ -526,30 +524,26 @@ No changes to `vllm/__init__.py` (old monkey-patch hook removed).
 - **SLO parameters**: discrete classes — strict (30%: TTFT=600ms, TPOT=80ms), normal (50%: TTFT=1000ms, TPOT=100ms), relaxed (20%: TTFT=1500ms, TPOT=150ms)
 - **Arrival rate**: 3 req/s (uniform)
 
-## 6. Results (latest run)
+## 6. Results (latest recorded run)
 
-Parameters: `BETA=1.0, W_TTFT=1000 (initial), W_TPOT=100 (initial), SOLUTION_MODE=3 (H4), DEFAULT_MAX_NUM_SEQS=256, CUSTOM_MAX_NUM_SEQS=400, NUM_REQUESTS=400, RATE_QPS=3, FREQ_STRIDE=3, MAX_BATCH_SIZE=256, IS_COOLDOWN=2, DECAY_PARAMETER=10000, IS_CHUNKED_PREFILL=1, SOLVER_LMAX=8192, VLLM_MAX_BATCHED_TOKENS=8192, GPU_MEM_UTIL=0.95`.
+Source: `results/beta_0.4/`.
+
+Parameters: `BETA=1.0, W_TTFT=1000 (initial), W_TPOT=100 (initial), SOLUTION_MODE=5 (H6), H6_TAU_GRID=4, DEFAULT_MAX_NUM_SEQS=256, CUSTOM_MAX_NUM_SEQS=400, NUM_REQUESTS=1000, RATE_QPS=3, FREQ_STRIDE=4, MAX_BATCH_SIZE=256, IS_COOLDOWN=2, DECAY_PARAMETER=10000, IS_CHUNKED_PREFILL=1, SOLVER_LMAX=8192, VLLM_MAX_BATCHED_TOKENS=8192, GPU_MEM_UTIL=0.95`.
 
 | Metric | Default | Custom |
 |--------|---------|--------|
-| mean_ttft_ms | 120.65 | 122.57 |
-| mean_tpot_ms | 44.79 | 46.02 |
 | mean_ttft_violation_ms | 0.0 | 0.0 |
-| mean_tpot_violation_ms | 0.08 | 0.15 |
+| mean_tpot_violation_ms | 0.0 | 0.0 |
 | mean_normalized_ttft_violation | 0.0 | 0.0 |
-| mean_normalized_tpot_violation | 0.001503 | 0.003017 |
-| ttft_slo_attainment | 1.0 | 1.0 |
-| tpot_slo_attainment | 0.945 | 0.93 |
-| mean_power_w | 339.86 | 349.71 |
-| total_energy_j | 57132.36 | 59000.18 |
-| mean_solve_exec_ratio | 0.0 | 0.008139 |
+| mean_normalized_tpot_violation | 0.0 | 0.0 |
+| mean_power_w | 368.78 | 93.27 |
+| total_energy_j | 165430.57 | 366867.49 |
+| mean_solve_exec_ratio | 0.0 | 0.178271 |
 
 **Notes on results**:
-- All 400 requests completed in both modes.
-- **TTFT**: Both schedulers achieve 100% TTFT SLO attainment. Custom scheduler has near-identical mean TTFT (122.6ms vs 120.7ms).
-- **TPOT**: Mean TPOT increases slightly (46.0ms vs 44.8ms). TPOT SLO attainment drops marginally (93% vs 94.5%). Normalized TPOT violation is very low in both modes (0.003 vs 0.0015).
-- **Energy**: With `β=1.0`, the solver does not aggressively lower GPU frequency, resulting in similar power (349.7W vs 339.9W) and energy (59.0kJ vs 57.1kJ). Higher β values (e.g., β=3.0) produce more aggressive energy savings at the cost of increased SLO violations.
-- **Solver overhead**: `mean_solve_exec_ratio = 0.008` means the solver takes ~0.8% of batch execution time — negligible overhead for the H4 heuristic.
+- The comparison table intentionally reports the compact metric set printed by `scripts/compare_results.py`.
+- For this H6 run, custom mean power is much lower, but total energy is higher because the run duration is much longer.
+- The violation metrics are computed over completed requests with measured TTFT/TPOT.
 
 ## 7. How to Reproduce
 
@@ -604,7 +598,7 @@ Edit the **USER KNOBS** block at the top of `main.sh` to change:
 - `TAG`: output directory name under `results/`
 - `MODE`: `"default"`, `"custom"`, or `"both"`
 - `BETA`, `W_TTFT`, `W_TPOT`: energy-utility trade-off parameters
-- `SOLUTION_MODE`: `1` (H2), `2` (H3), `3` (H4, default), `4` (H5)
+- `SOLUTION_MODE`: `3` (H4), `4` (H5), `5` (H6, current default)
 - `IS_COOLDOWN`: `1` (cooldown) or `2` (decay, default)
 - `IS_CHUNKED_PREFILL`: `0` (disabled) or `1` (enabled, default)
 - `VLLM_MAX_BATCHED_TOKENS`, `SOLVER_LMAX`: token budget controls
@@ -626,7 +620,7 @@ energy_efficient_LLM_scheduling/
 │   ├── metrics_collector.py         # Results aggregation → summary.json
 │   └── compare_results.py           # Side-by-side comparison → CSV
 ├── vllm_patches/
-│   ├── solver.py                    # Pure algorithm (EnergySchedConfig, Alt1HeuristicSolver: H2+H3+H4+H5)
+│   ├── solver.py                    # Pure algorithm (EnergySchedConfig, Alt1HeuristicSolver: H4+H5+H6)
 │   ├── energy_model.py              # Latency + power models (LatencyParams, PowerParams)
 │   ├── frequency_controller.py      # GPU SM clock control (pynvml wrapper)
 │   ├── __init__.py                  # Package re-exports
